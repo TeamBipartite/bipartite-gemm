@@ -136,13 +136,8 @@ void two_hop_reachability( DenseGraph *g )
 
 
       if (!threadIdx.x)
-      //if (blockIdx.x == 1 && blockIdx.y == 1 && !threadIdx.x)
-        //product *= 2;
         // Atomically add product to c
         atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
-        //atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) +  b_tile_col, 1);
-        //g->dest[a_col*g->n + a_row] =a_col;
-        //atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, smem[threadIdx.y * blockDim.y + b_tile_col]);
 
       // Not actually needed?
       //__syncthreads();

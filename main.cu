@@ -7,6 +7,7 @@
 #include <iostream> // std::cout, std::endl
 #include <iterator> // std::ostream_iterator
 #include <vector>
+#include <cblas.h>
 
 #include "dense_graph.h"
 #include "sparse_graph.h"
@@ -135,13 +136,13 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
 
     for (int idx = 0; idx < n+1; idx++)
     {
-        //std::cout << offsets[idx] << " ";
+        std::cout << offsets[idx] << " ";
     }
     std::cout << "\n";
 
     for (int idx = 0; idx < m; idx++)
     {
-        //std::cout << neighbours[idx] << " ";
+        std::cout << neighbours[idx] << " ";
     }
     std::cout << "\n";
 
@@ -175,7 +176,7 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 4096;
+    std::size_t constexpr n = 4;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
@@ -188,11 +189,11 @@ int main()
     }
     std::cout << "\n";
 
+    // need to malloc since the matrix will exceed default stack size when n >= 1024
     csc485b::a2::node_t *matrix, *res;
     matrix = (csc485b::a2::node_t*) malloc(sizeof(csc485b::a2::node_t) * n * n);
     res = (csc485b::a2::node_t*) malloc(sizeof(csc485b::a2::node_t) * n * n);
-    //[n*n];
-    //csc485b::a2::node_t res[n*n];
+
     for (std::size_t idx = 0; idx < n*n; idx++)
     {
         matrix[idx] = 0;
@@ -215,7 +216,11 @@ int main()
 
     //print_matrix(matrix, n);
 
-    matmul(matrix, res, n);
+    // naive n^3 implementation
+    //matmul(matrix, res, n);
+
+    //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n, n, 1.0,
+    //            (float*) matrix, n, (float*) matrix, n, 1.0, (float*) res, n);
 
     std::cout << "Correct output\n";
     print_matrix(res, n);
@@ -228,8 +233,8 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-     run_sparse( d_edges, n, m );
-    run_dense ( d_edges, n, m, res );
+    run_sparse( d_edges, n, m );
+    //run_dense ( d_edges, n, m, res );
 
     free(res);
     free(matrix);

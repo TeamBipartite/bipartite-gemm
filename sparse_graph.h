@@ -137,7 +137,7 @@ void prefix_sum( SparseGraph *g, T *block_sums, std::size_t n )
     __syncthreads();
 
     // Since we only launch a 1D kernel, the blockIdx.x's are unique
-    if ( global_th_idx < n && (global_th_idx % 1024 == 1023 || global_th_idx == n -1 )  ){
+    if ( global_th_idx < n && (!((global_th_idx+1) % 1024) || global_th_idx == n -1 )  ){
         block_sums[blockIdx.x] = smem[th_idx];
     }
 
@@ -227,10 +227,10 @@ void finish_prefix_sum(T *arr, T* block_sums, std::size_t n)
 
 
 __global__
-void bucket_sort( SparseGraph *g, const edge_t *edges )
+void bucket_sort( SparseGraph *g, const edge_t *edges, node_t *scratch)
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
-
+    scratch[global_th_id] = g->neighbours_start_at[global_th_id];
 
     if (global_th_id < g->m)
     {
@@ -238,7 +238,7 @@ void bucket_sort( SparseGraph *g, const edge_t *edges )
         node_t this_vertex  = edge.x;
         node_t other_vertex = edge.y;
 
-        int pos = atomicAdd(g->neighbours_start_at + this_vertex, 1);
+        int pos = atomicAdd(scratch + this_vertex, 1);
         g->neighbours[pos] = other_vertex;
     }
 
@@ -257,7 +257,7 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
     std::size_t const threads_per_block = 1024;
     std::size_t const num_blocks =  ( n + threads_per_block - 1 ) / threads_per_block;
 
-    node_t *tmp_blk_sums, *temp_prefix_sums;
+    node_t *tmp_blk_sums, *tmp_prefix_sums;
     cudaMalloc( (void**) &tmp_blk_sums, sizeof(node_t) * num_blocks );
 
     histogram<<< num_blocks, threads_per_block >>>( edge_list, m, g );
@@ -272,8 +272,11 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
 
 
     // bucket_sort
-    bucket_sort<<< num_blocks, threads_per_block >>>(  g, edge_list );
+    cudaMalloc( (void**) &tmp_prefix_sums, sizeof(node_t) * n );
+    bucket_sort<<< num_blocks, threads_per_block >>>(  g, edge_list,
+                                                       tmp_prefix_sums );
 
+    cudaFree( (void**) tmp_prefix_sums);
     return;
 }
 
