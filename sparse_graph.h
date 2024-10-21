@@ -245,6 +245,23 @@ void bucket_sort( SparseGraph *g, const edge_t *edges, node_t *scratch)
     return;
 }
 
+// Emily
+__global__
+void get_vertex_degree( SparseGraph *g, node_t* degrees);
+
+// John
+__global__
+void populate_bitstring( SparseGraph *g, uint8_t* bitstrings, node_t* degrees );
+
+// John
+__global__
+// Need to ask about whether new array of counts <= m ?
+void get_global_counts( SparseGraph *g, uint8_t* bitstrings );
+
+// Emily
+__global__
+void bitstring_bucket_sort( SparseGraph *g, uint8_t* bitstrings );
+
 
 /**
  * Constructs a SparseGraph from an input edge list of m edges.
@@ -287,8 +304,8 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
 __global__
 void two_hop_reachability( SparseGraph *g )
 {
-    // IMPLEMENT ME!
-    // algorithm unknown
+    // TODO: Cannot be a device function
+    // TODO: Update dense so functions match
     return;
 }
 

@@ -142,8 +142,10 @@ void two_hop_reachability( DenseGraph *g )
       // Not actually needed?
       //__syncthreads();
     }
-
+    
+    // Either padding or boundary checking for n not multiple of 32
     // then remove the diagonal and clamp values back to [0,1]
+    // Remove self loops
     return;
 }
 
