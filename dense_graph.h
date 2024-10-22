@@ -136,12 +136,10 @@ void two_hop_reachability( DenseGraph *g )
       std::size_t dot_product = warp_sum(product);
 
 
-      if (!threadIdx.x)
+      if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && dot_product)
         // Atomically add product to c
-        atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
+        atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
 
-      // Not actually needed?
-      //__syncthreads();
     }
     
     // Either padding or boundary checking for n not multiple of 32
