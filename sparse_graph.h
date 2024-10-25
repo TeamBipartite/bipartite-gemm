@@ -147,45 +147,61 @@ void prefix_sum( SparseGraph *g, T *block_sums, std::size_t n )
 
 template<typename T>
 __global__
-void prefix_sum( T *arr, std::size_t n )
-{
-    const std::size_t global_th_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const std::size_t th_idx = threadIdx.x;
+void single_block_prefix_sum( T *arr, std::size_t n  ){
+    const std::size_t th_id = threadIdx.x;
 
-    __shared__ T smem[1024];
-    smem[th_idx] = arr[global_th_idx % n];
+    /*
+    Since we only launch 1 block, we can use all of smem.
+    Tesla T4's have 64KB of smem per SM which gives 64KB/4B = 16384 uint32's
+    But, using this much results in the following error: 
+      function '_Z23single_block_prefix_sumIiEvPT_m' uses too much shared data (0x10000 bytes, 0xc000 max)
+    So, only use half of 0xc000 bytes (i.e. 49152 bytes) per SM.
+    49152B/4B = 12,288 unint32's 
+    Use 12,288B/2 = 6144B for smem and other 6144B for scratch.
+    */
+    // TODO: may be better not to templatize this function since the smem calculations are specific for unint32, not type T
+    __shared__ T smem[6144];
+    __shared__ T scratch[6144];
+
+    // Put all values this thread is responsible for in smem and scratch
+    for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
+        smem[data_idx] = arr[data_idx];
+        scratch[data_idx] = smem[data_idx];
+    }
+
     __syncthreads();
 
-    for (std::size_t stride = 1; stride < 1024; stride <<= 1)
-    {
-        std::size_t val = 0;
+    for (std::size_t stride = 1; stride < n; stride <<= 1){
 
-        if ( th_idx >= stride ){
-            val = smem[th_idx - stride];
+        // copy into scratch
+        for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024 ){
+            scratch[data_idx] = smem[data_idx];
         }
 
-        /*
-          Needs to be a sync here.
-          A fench only guarantees a strong ordering and flushing. But it does not guarantee
-          that all threads will see the flushed value before it is accessed.
-        */
-        __syncthreads(); // FENCE
+        __syncthreads();
 
-        if ( th_idx >= stride ){
+        for (std::size_t my_lane = th_id; my_lane < n; my_lane += 1024){
 
-            smem[th_idx] +=  val;
+          std::size_t val = 0;
+
+          if ( my_lane >= stride ){
+              val = scratch[my_lane - stride];
+          }
+
+          __syncthreads();
+
+          if ( my_lane >= stride ){
+              smem[my_lane] +=  val;
+          }
+          __syncthreads();
         }
-         __syncthreads();
-
     }
 
-    if (global_th_idx < n ){
-        arr[global_th_idx] = smem[th_idx];
+    // Put all values this thread is responsible for back into the array.
+    for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
+        arr[data_idx] = smem[data_idx];
     }
-
-    return;
 }
-
 
 template<typename T>
 __global__
@@ -282,7 +298,7 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
 
     // prefix_sum
     prefix_sum<<< num_blocks, threads_per_block >>>( g, tmp_blk_sums, n+1 );
-    //prefix_sum<<< 1 , num_blocks >>>( tmp_blk_sums, inter.size(), false );
+    //single_block_prefix_sum<<< 1 , threads_per_block >>>( tmp_blk_sums, num_blocks );
     //finish_prefix_sum<<< num_blocks, threads_per_block >>>( tmp_blk_sums, tmp_blk_sums, input.size() );
 
     cudaFree(tmp_blk_sums);
