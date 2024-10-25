@@ -176,8 +176,8 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 4;
-    std::size_t constexpr expected_degree = n >> 1;
+    std::size_t constexpr n = 32;
+    std::size_t constexpr expected_degree = n >> 3;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
     std::size_t const m = graph.size();
@@ -214,10 +214,10 @@ int main()
         matrix[(e.x*n) + e.y] = 1;
     }
 
-    //print_matrix(matrix, n);
+    print_matrix(matrix, n);
 
     // naive n^3 implementation
-    //matmul(matrix, res, n);
+    matmul(matrix, res, n);
 
     //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n, n, 1.0,
     //            (float*) matrix, n, (float*) matrix, n, 1.0, (float*) res, n);
@@ -233,8 +233,8 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-    run_sparse( d_edges, n, m );
-    //run_dense ( d_edges, n, m, res );
+    //run_sparse( d_edges, n, m );
+    run_dense ( d_edges, n, m, res );
 
     free(res);
     free(matrix);

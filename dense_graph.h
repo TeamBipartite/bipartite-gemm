@@ -109,7 +109,8 @@ void two_hop_reachability( DenseGraph *g )
 
     // Copy tile of B (transposed) into smem
     __shared__ a2::node_t smem[1024];
-    smem[(threadIdx.y * blockDim.y) + threadIdx.x ] = g->adjacencyMatrix[(b_row * g->n) + b_col];
+    //smem[(threadIdx.y * blockDim.y) + threadIdx.x ] = g->adjacencyMatrix[(b_row * g->n) + b_col];
+    smem[(threadIdx.x * blockDim.x) + threadIdx.y ] = g->adjacencyMatrix[(b_row * g->n) + b_col];
     __syncthreads();
 
     // Each thread performs calculations for a fixed a value, retrieve it here
@@ -119,11 +120,11 @@ void two_hop_reachability( DenseGraph *g )
     {
 
       // Perform single cell product of a and b for thread
-      //std::size_t product =  a_val * smem[(b_tile_col * blockDim.x) + threadIdx.x];
+      std::size_t product =  a_val * smem[(b_tile_col * blockDim.x) + threadIdx.x];
       //std::size_t product =  a_val * smem[(threadIdx.x * blockDim.x) + b_tile_col];
 
       // non-smem version
-      std::size_t product =  a_val * g->adjacencyMatrix[(a_col* g->n) + (blockIdx.x * blockDim.x)+ b_tile_col];
+      //std::size_t product =  a_val * g->adjacencyMatrix[(a_col* g->n) + (blockIdx.x * blockDim.x)+ b_tile_col];
 
       // make sure that all accesses to smem are complete before we perform warp_sum
       __syncwarp();
@@ -135,12 +136,10 @@ void two_hop_reachability( DenseGraph *g )
       std::size_t dot_product = warp_sum(product);
 
 
-      if (!threadIdx.x)
+      if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && dot_product)
         // Atomically add product to c
-        atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
+        atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
 
-      // Not actually needed?
-      //__syncthreads();
     }
     
     // Either padding or boundary checking for n not multiple of 32
