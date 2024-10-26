@@ -145,9 +145,9 @@ void prefix_sum( SparseGraph *g, T *block_sums, std::size_t n )
     return;
 }
 
-template<typename T>
+
 __global__
-void single_block_prefix_sum( T *arr, std::size_t n  ){
+void single_block_prefix_sum( node_t *arr, std::size_t n  ){
     const std::size_t th_id = threadIdx.x;
 
     /*
@@ -159,9 +159,8 @@ void single_block_prefix_sum( T *arr, std::size_t n  ){
     49152B/4B = 12,288 unint32's 
     Use 12,288B/2 = 6144B for smem and other 6144B for scratch.
     */
-    // TODO: may be better not to templatize this function since the smem calculations are specific for unint32, not type T
-    __shared__ T smem[6144];
-    __shared__ T scratch[6144];
+    __shared__ node_t smem[6144];
+    __shared__ node_t scratch[6144];
 
     // Put all values this thread is responsible for in smem and scratch
     for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
@@ -243,7 +242,7 @@ void finish_prefix_sum(T *arr, T* block_sums, std::size_t n)
 
 
 __global__
-void bucket_sort( SparseGraph *g, const edge_t *edges, node_t *scratch)
+void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
     scratch[global_th_id] = g->neighbours_start_at[global_th_id];
@@ -276,7 +275,7 @@ void get_global_counts( SparseGraph *g, uint8_t* bitstrings );
 
 // Emily
 __global__
-void bitstring_bucket_sort( SparseGraph *g, uint8_t* bitstrings );
+void bitstring_store( SparseGraph *g, uint8_t* bitstrings );
 
 
 /**
@@ -304,9 +303,9 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
     cudaFree(tmp_blk_sums);
 
 
-    // bucket_sort
+    // store
     cudaMalloc( (void**) &tmp_prefix_sums, sizeof(node_t) * n );
-    bucket_sort<<< num_blocks, threads_per_block >>>(  g, edge_list,
+    store<<< num_blocks, threads_per_block >>>(  g, edge_list,
                                                        tmp_prefix_sums );
 
     cudaFree( (void**) tmp_prefix_sums);
