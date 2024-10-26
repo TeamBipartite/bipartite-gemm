@@ -203,7 +203,7 @@ int main()
     
     // Create input
     std::size_t constexpr n = 4096;
-    std::size_t constexpr expected_degree = n >> 9;
+    std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
     std::size_t const m = graph.size();
@@ -265,7 +265,8 @@ int main()
 
     // run your code!
     //run_sparse( d_edges, padded_n, m );
-    run_dense ( d_edges, padded_n, m, res );
+    //for (int idx = 0; idx < 10; idx++ )
+        run_dense ( d_edges, padded_n, m, res );
 
     free(res);
     free(matrix);
