@@ -70,14 +70,17 @@ __device__
 std::size_t warp_sum(std::size_t th_val)
 {
   std::size_t th_id = threadIdx.x;
+  std::size_t new_val = 0;
+  uint32_t shuffle_mask = 0xFFFFFFFF;
 
-  uint32_t active_mask = 0xFFFFFFFF;
   for (std::size_t stride = 1; stride < 32; stride <<= 1)
   {
-      // check if bit th_idx is set in active_mask
-      if ((0x1 << th_id) & active_mask)
-        th_val += __shfl_down_sync(active_mask, th_val, stride);
-      active_mask >>= 1;
+      new_val = __shfl_down_sync(0xFFFFFFFF, th_val, stride);
+      // Only add the new value if this thread is in the mask!
+      if ((0x1 << th_id) & shuffle_mask){
+        th_val += new_val;
+      }
+      shuffle_mask >>= 1;
   }
 
   return th_val;
