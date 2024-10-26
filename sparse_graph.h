@@ -164,8 +164,9 @@ void single_block_prefix_sum( node_t *arr, std::size_t n  ){
 
     // Put all values this thread is responsible for in smem and scratch
     for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
-        smem[data_idx] = arr[data_idx];
-        scratch[data_idx] = smem[data_idx];
+        const node_t val = arr[data_idx];
+        smem[data_idx] = val;
+        scratch[data_idx] = val;
     }
 
     __syncthreads();
