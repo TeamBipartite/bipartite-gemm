@@ -247,6 +247,7 @@ void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
     scratch[global_th_id] = g->neighbours_start_at[global_th_id];
+    __syncthreads(); 
 
     if (global_th_id < g->m)
     {
@@ -276,7 +277,47 @@ void get_global_counts( SparseGraph *g, uint8_t* bitstrings );
 
 // Emily
 __global__
-void bitstring_store( SparseGraph *g, uint8_t* bitstrings );
+// ASSUMPTION: We have >= n*n threads since |bitstrings| = nxn
+/*
+    0 1        0 1 2 3
+    ---        --------
+0 | a b  --->  a b c d
+1 | c d        row = flat_array_idx / n
+               col = flat_array_idx % n
+*/
+void bitstring_store( SparseGraph *g, uint8_t* bitstrings, node_t *scratch){
+    /*
+        - bitstrings is an nxn array which means that we have nxn threads
+        - The row in bitstring determines which idx is start_at a thread will use
+    */
+    const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
+    const std::size_t n = g->n;
+
+    /*
+        Only copy to scratch if you are thread in row zero to promote memory coalescing 
+        Not using smem, so no need to worry about bank conflicts
+        Since bitstrings is a flat array of size nxn, only the first n threads to write to scratch
+    */ 
+    if (global_th_id < n){
+        scratch[global_th_id] = g->neighbours_start_at[global_th_id ];
+    }
+
+    __syncthreads();
+    
+    // this vertex is the row!
+    node_t this_vertex = global_th_id / n;
+    // other vertex is the column!
+    node_t other_vertex = global_th_id % n;
+
+    // Only consider valid edges and exclude self loops!
+    if (global_th_id < n*n && this_vertex != other_vertex && bitstrings[global_th_id]){
+
+        int pos = atomicAdd(scratch + this_vertex, 1);
+        g->neighbours[pos] = other_vertex;
+
+    }
+
+}
 
 
 /**
