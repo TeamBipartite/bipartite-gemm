@@ -45,7 +45,7 @@ void run( DeviceGraph *g, csc485b::a2::edge_t const * d_edges, std::size_t m, st
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
     // neither does this!
-    csc485b::a2::gpu::two_hop_reachability<<< dim3{n/32, n/32, n/32}, dim3{32, 32, 1} >>>( g );
+    csc485b::a2::gpu::two_hop_reachability( g, n );
 
     cudaDeviceSynchronize();
     auto const end = std::chrono::high_resolution_clock::now();
@@ -202,7 +202,7 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 4096;
+    std::size_t constexpr n = 4;
     std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
@@ -211,13 +211,13 @@ int main()
     std::size_t padded_n = get_padded_sz(n);
 
     // lazily echo out input graph
-    /*
+    
     for( auto const& e : graph )
     {
         std::cout << "(" << e.x << "," << e.y << ") ";
     }
     std::cout << "\n";
-    */
+    
 
     // need to malloc since the matrix will exceed default stack size when n >= 1024
     float *matrix, *res;
@@ -236,13 +236,13 @@ int main()
 
     //print_matrix(matrix, padded_n);
 
-    // OpenBLAS implementation
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
 #ifdef NO_OPENBLAS
     // naive n^3 implementation
     matmul(matrix, res, padded_n);
 #else
+    // OpenBLAS implementation
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, padded_n, padded_n, padded_n, 1.0,
                 matrix, padded_n, matrix, padded_n, 1.0, res, padded_n);
 #endif
@@ -264,9 +264,9 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-    //run_sparse( d_edges, padded_n, m );
+    run_sparse( d_edges, padded_n, m );
     //for (int idx = 0; idx < 10; idx++ )
-        run_dense ( d_edges, padded_n, m, res );
+    //    run_dense ( d_edges, padded_n, m, res );
 
     free(res);
     free(matrix);

@@ -88,7 +88,7 @@ std::size_t warp_sum(std::size_t th_val)
   * the two-hop neighbourhood of input graph g
   */
 __global__
-void two_hop_reachability( DenseGraph *g )
+void two_hop_reachability_kernel( DenseGraph *g )
 {
     // IMPLEMENT ME!
     // square adjacencyMatrix
@@ -127,42 +127,35 @@ void two_hop_reachability( DenseGraph *g )
       // make sure that all accesses to smem are complete before we perform warp_sum
       __syncwarp();
 
+#ifdef USE_FULL_MULTIPLY
 #ifdef NO_WARP_PRIMITIVES
       // use Atomics to add instead of warp primitives
-      //if (product)
       atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, product);
-      //if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
-          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
-        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
-      //if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
-          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
-          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
-        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
 #else
       // use warp primitives to add
-      //std::size_t dot_product = warp_sum(product);
-      //if (!threadIdx.x)
-      //  atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
-      //if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
+      std::size_t dot_product = warp_sum(product);
+      if (!threadIdx.x)
+        atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
+#endif // NO_WARP_PRIMITIVES
+#else // USE_FULL_MULTIPLY
       if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
-        // Atomically add product to c
         g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
-        //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
-      //product = __any_sync(0xFFFFFFFF, product);
-
-      //if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
-        // Atomically add product to c
-        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
-        //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
 #endif
 
     }
-    
-    //if (c_row == c_col)
-    //    g->dest[(c_row * g->n) + c_col] = 0;
-    //else if ( g->dest[(c_row * g->n) + c_col])
-    //    g->dest[(c_row * g->n) + c_col] = 1;
+
+#ifdef USE_FULL_MULTIPLY
+    if (c_row == c_col)
+        g->dest[(c_row * g->n) + c_col] = 0;
+    else if ( g->dest[(c_row * g->n) + c_col])
+        g->dest[(c_row * g->n) + c_col] = 1;
+#endif
     return;
+}
+
+void two_hop_reachability( DenseGraph *g, std::size_t n )
+{
+    two_hop_reachability_kernel<<< dim3{n/32, n/32, n/32}, dim3{32, 32, 1} >>>(g);
 }
 
 } // namespace gpu
