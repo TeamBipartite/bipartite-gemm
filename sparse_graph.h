@@ -147,8 +147,13 @@ void prefix_sum( SparseGraph *g, T *block_sums, std::size_t n )
 
 
 __global__
-void single_block_prefix_sum( node_t *arr, std::size_t n  ){
+void single_block_prefix_sum( int *arr, std::size_t n  ){
     const std::size_t th_id = threadIdx.x;
+    std::size_t max_number_items = n / 1024;
+    if (n%1024){
+        max_number_items += 1;
+    }
+
 
     /*
     Since we only launch 1 block, we can use all of smem.
@@ -159,12 +164,12 @@ void single_block_prefix_sum( node_t *arr, std::size_t n  ){
     49152B/4B = 12,288 unint32's 
     Use 12,288B/2 = 6144B for smem and other 6144B for scratch.
     */
-    __shared__ node_t smem[6144];
-    __shared__ node_t scratch[6144];
+    __shared__ int smem[6144];
+    __shared__ int scratch[6144];
 
     // Put all values this thread is responsible for in smem and scratch
     for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
-        const node_t val = arr[data_idx];
+        const int val = arr[data_idx];
         smem[data_idx] = val;
         scratch[data_idx] = val;
     }
@@ -180,17 +185,18 @@ void single_block_prefix_sum( node_t *arr, std::size_t n  ){
 
         __syncthreads();
 
-        for (std::size_t my_lane = th_id; my_lane < n; my_lane += 1024){
+        // All threads in the block need to do the same number of iterations to ensure they all reach the sync!
+        for (std::size_t my_lane = th_id, iteration = 0; iteration < max_number_items; my_lane += 1024, ++iteration){
 
           std::size_t val = 0;
 
-          if ( my_lane >= stride ){
+          if ( my_lane < n && my_lane >= stride ){
               val = scratch[my_lane - stride];
           }
 
           __syncthreads();
 
-          if ( my_lane >= stride ){
+          if ( my_lane < n && my_lane >= stride ){
               smem[my_lane] +=  val;
           }
           __syncthreads();
