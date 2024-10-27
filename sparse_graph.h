@@ -266,32 +266,35 @@ void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 __global__
 void invert_neighbours( SparseGraph *g, node_t *neighbours_inverse){
     const std::size_t warp_id = threadIdx.y;
+    const std::size_t lane_id = threadIdx.x;
     const std::size_t this_vertex_idx = blockIdx.x * blockDim.x + threadIdx.x;
     node_t this_vertex = g->neighbours[this_vertex_idx];
     const std::size_t vertex_lower_bound = blockIdx.y * blockDim.y + threadIdx.y;
     std::size_t vertex_upper_bound = vertex_lower_bound;
     std::size_t n = g->n;
 
-    // Need 33 elements because threads in warp 31 may require the next vertex
+    if (vertex_lower_bound < n -1 ) {
+        ++vertex_upper_bound;
+    }
+
+    // Need 33 elements because threads in warp 31 may require the next vertex for upper bound
     __shared__ node_t smem[33];
 
-    if (!warp_id){
+    if (!lane_id){
         smem[warp_id] = g->neighbours_start_at[vertex_lower_bound];
     }
 
-    if ( !(warp_id % 31) && (vertex_lower_bound < n) && (vertex_lower_bound != n-1) ){
-        smem[32] = g->neighbours_start_at[vertex_lower_bound];
+
+    if ( !lane_id && (warp_id == 31) && (vertex_lower_bound < n) && (vertex_lower_bound != n-1) ){
+        smem[32] = g->neighbours_start_at[vertex_upper_bound];
     }
 
     __syncthreads();
     
-    if (vertex_lower_bound < (n - 1) ) {
-        ++vertex_upper_bound;
-    }
 
     if ( (this_vertex_idx < g->m) && (vertex_lower_bound < n) &&
-         this_vertex >= smem[warp_id] && 
-        (vertex_lower_bound == vertex_upper_bound || this_vertex < smem[warp_id + 1])){
+         this_vertex_idx >= smem[warp_id] && 
+        (vertex_lower_bound == vertex_upper_bound || this_vertex_idx < smem[warp_id + 1])){
             neighbours_inverse[this_vertex_idx] = vertex_lower_bound;
     }
 
