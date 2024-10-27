@@ -382,24 +382,6 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
     cudaMalloc( (void**) &tmp_prefix_sums, sizeof(node_t) * n );
     store<<< num_blocks, threads_per_block >>>(  g, edge_list,
                                                        tmp_prefix_sums );
-
-    
-    // build an array of bitstrings 
-    std::vector<uint8_t> bitstrings_vec(1);
-    bitstrings_vec.push_back(0b01100000);
-    uint8_t* d_bitstrings;
-    cudaMalloc( (void**) &d_bitstrings, sizeof( uint8_t ));
-    cudaMemcpy( (void**) &d_bitstrings, bitstrings_vec.data(), sizeof( uint8_t ), cudaMemcpyHostToDevice );
-
-    node_t* d_scratch;
-    cudaMalloc( (void**) &d_scratch, sizeof( node_t )*n);
-
-    bitstring_store<<< 1, 4>>>( g, d_bitstrings, d_scratch);
-
-
-    cudaFree( (void**) tmp_prefix_sums);
-    cudaFree( (void**) d_scratch );
-    cudaFree( (void**) d_bitstrings );
     
     return;
 }
