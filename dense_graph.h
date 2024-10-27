@@ -36,10 +36,6 @@ namespace gpu {
 __global__
 void add_neighbour_pair( DenseGraph *g, edge_t const * edge_list, std::size_t m)
 {
-    /*
-      Consideration: If we are worried about m > avail threads on GPU, then
-      we can have each thread be responsible for > 1 edge.
-    */
 
     const std::size_t th_idx = blockIdx.x * blockDim.x + threadIdx.x;
     // Results in index access pattern of 0, 3, 4, 7, 8, ... to facilitate coalescing
@@ -121,7 +117,6 @@ void two_hop_reachability( DenseGraph *g )
 
     for (std::size_t b_tile_col = 0; b_tile_col < blockDim.x; b_tile_col++)
     {
-
       // Perform single cell product of a and b for thread
       std::size_t product =  a_val * smem[(b_tile_col * blockDim.x) + threadIdx.x];
       //std::size_t product =  a_val * smem[(threadIdx.x * blockDim.x) + b_tile_col];
@@ -132,22 +127,41 @@ void two_hop_reachability( DenseGraph *g )
       // make sure that all accesses to smem are complete before we perform warp_sum
       __syncwarp();
 
+#ifdef NO_WARP_PRIMITIVES
       // use Atomics to add instead of warp primitives
-      //atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, product);
-
+      //if (product)
+      atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, product);
+      //if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
+          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
+      //if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
+          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+          //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
+#else
       // use warp primitives to add
-      std::size_t dot_product = warp_sum(product);
-
-
-      if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && dot_product)
+      //std::size_t dot_product = warp_sum(product);
+      //if (!threadIdx.x)
+      //  atomicAdd(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, dot_product);
+      //if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
+      if (c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
         // Atomically add product to c
-        atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+        g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
+        //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+      //product = __any_sync(0xFFFFFFFF, product);
+
+      //if (!threadIdx.x && c_row != (blockIdx.x * blockDim.x + b_tile_col) && product)
+        // Atomically add product to c
+        //g->dest[(c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col] = 1;
+        //atomicMax(g->dest + (c_row * g->n) + (blockIdx.x * blockDim.x) + b_tile_col, 1);
+#endif
 
     }
     
-    // Either padding or boundary checking for n not multiple of 32
-    // then remove the diagonal and clamp values back to [0,1]
-    // Remove self loops
+    //if (c_row == c_col)
+    //    g->dest[(c_row * g->n) + c_col] = 0;
+    //else if ( g->dest[(c_row * g->n) + c_col])
+    //    g->dest[(c_row * g->n) + c_col] = 1;
     return;
 }
 

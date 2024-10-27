@@ -263,11 +263,11 @@ void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 
 // Emily
 __global__
-void get_vertex_degree( SparseGraph *g, node_t* degrees);
+void invert_neighbours( SparseGraph *g, node_t *alpha);
 
 // John
 __global__
-void populate_bitstring( SparseGraph *g, uint8_t* bitstrings, node_t* degrees );
+void populate_bitstring( SparseGraph *g, node_t *alpha);
 
 // John
 __global__
