@@ -308,12 +308,12 @@ void populate_bitstring( SparseGraph *g, node_t *alpha, uint32_t *bitstrings)
     const std::size_t idx_a = blockIdx.x * blockDim.x + threadIdx.x;
     const std::size_t idx_b = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (g->neighbours[idx_a] == g->neighbours[idx_b])
+    if (g->neighbours[idx_a] == g->neighbours[idx_b] && idx_a != idx_b)
     {
         node_t endpoint1 = alpha[idx_a];
         node_t endpoint2 = alpha[idx_b];
         std::size_t bit_idx = endpoint1*g->n + endpoint2;
-        atomicOr(bitstrings + (bit_idx / 32), 0x8000 >> (bit_idx % 32));
+        atomicOr(bitstrings + (endpoint1), 0x8000 >> (endpoint2));
         
         //std::size_t bit_idx_rev = endpoint2*g->n + endpoint1;
         //bitstrings[bit_idx_rev / 8] |= 1 << (bit_idx_rev % 8);
@@ -329,7 +329,7 @@ __global__
 void get_global_counts( SparseGraph *g, uint32_t *bitstrings )
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
-    const std::size_t parent_vertex= global_th_id / g->n;
+    const std::size_t parent_vertex= global_th_id / (g->n/32);
 
     atomicAdd( g->neighbours_start_at + parent_vertex, __popc(bitstrings[global_th_id]) );
 
@@ -434,21 +434,21 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
   * Repopulates the adjacency lists as a new graph that represents
   * the two-hop neighbourhood of input graph g
   */
-void two_hop_reachability( SparseGraph *g, std::size_t n )
+void two_hop_reachability( SparseGraph *g, std::size_t n, std::size_t m )
 {
     node_t *d_alpha;
     uint8_t *d_bitstrings, *bitstrings;
-    node_t alpha[10] = {0, 0, 1, 1, 2, 2, 2, 3, 3, 3};
-    cudaMalloc( (void**)&d_alpha,    sizeof( node_t ) * 10);
-    cudaMemcpy( d_alpha, alpha, sizeof(node_t)*10, cudaMemcpyHostToDevice );
-
+    cudaMalloc( (void**)&d_alpha,    sizeof( node_t ) * m);
     cudaMalloc( (void**)&d_bitstrings, n*n/sizeof( uint8_t) );
 
+    invert_neighbours<<< dim3{ n/32, m/32, 1}, dim3{32, 32, 1}>>>( g, d_alpha); 
     populate_bitstring<<< dim3{ n/32, n/32, 1}, dim3{10, 10, 1}>>>( g, d_alpha, (uint32_t*)d_bitstrings);
+    zero_array<<< 1, 32>>>( g, 32);
+    get_global_counts<<< 1, 32>>>( g, (uint32_t*)d_bitstrings);
     bitstrings = (uint8_t*)malloc(n*n/sizeof(uint8_t)); 
     cudaMemcpy( bitstrings, d_bitstrings, n*n/sizeof(uint8_t), cudaMemcpyDeviceToHost );
     for (int idx = 0; idx < n*n/32; idx++)
-        printf("%d: %0x\n", idx, (uint32_t) (bitstrings[idx]));
+        printf("%d: %0x\n", idx, ((uint32_t*)(bitstrings))[idx]);
     //zero_array<<< n/1024, 1024 >>>( g, n);
     //get_global_counts<<< n*n/32/1024, 1024>>>( g, (uint32_t*) d_bitstrings);
 
