@@ -73,7 +73,9 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
     // allocate device DenseGraph
     a2::node_t * d_matrix, *d_dest;
     cudaMalloc( (void**)&d_matrix, sizeof( a2::node_t ) * n * n );
+    cudaMemset(d_matrix, 0x0, sizeof( a2::node_t ) * n * n );
     cudaMalloc( (void**)&d_dest, sizeof( a2::node_t ) * n * n );
+    cudaMemset(d_dest, 0x0, sizeof( a2::node_t ) * n * n );
     a2::DenseGraph dg{ n, d_matrix, d_dest };
     a2::DenseGraph *d_dg;
     cudaMalloc( (void**)&d_dg, sizeof( a2::DenseGraph ) );
@@ -113,6 +115,8 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
 
     // clean up
     cudaFree( d_matrix );
+    cudaFree( d_dest );
+    cudaFree(d_dg);
 }
 
 /**
@@ -123,9 +127,12 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     using namespace csc485b;
 
     // allocate device SparseGraph
-    a2::node_t * d_offsets, * d_neighbours;
+    a2::node_t * d_offsets;
+    a2::node_t * d_neighbours;
     cudaMalloc( (void**)&d_offsets,    sizeof( a2::node_t ) * (n+1) );
+    cudaMemset(d_offsets, 0x0, sizeof( a2::node_t ) * (n+1));
     cudaMalloc( (void**)&d_neighbours, sizeof( a2::node_t ) * m );
+    cudaMemset(d_neighbours, 0x0, sizeof( a2::node_t ) * m );
     a2::SparseGraph sg{n, m, d_offsets, d_neighbours };
     a2::SparseGraph *d_sg;
     cudaMalloc( (void**)&d_sg, sizeof( a2::SparseGraph ) );
@@ -135,29 +142,53 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     run( d_sg, d_edges, m, n );
 
     // check output
-    a2::SparseGraph *sg_res;
-    a2::node_t *offsets, *neighbours;
-    sg_res = (a2::SparseGraph*)malloc(sizeof( a2::SparseGraph));
-    offsets = (a2::node_t*)malloc(sizeof( a2::node_t) * n);
+    a2::node_t *offsets;
+    a2::node_t *neighbours;
+    offsets = (a2::node_t*)malloc(sizeof( a2::node_t) * n+1);
     neighbours = (a2::node_t*)malloc(sizeof( a2::node_t) * m);
-    cudaMemcpy( sg_res, d_sg, sizeof( a2::SparseGraph ), cudaMemcpyDeviceToHost );
-    cudaMemcpy( offsets, sg_res->neighbours_start_at, sizeof( a2::node_t ) * (n+1), cudaMemcpyDeviceToHost );
+    cudaMemcpy( offsets, d_offsets, sizeof( a2::node_t ) * (n+1), cudaMemcpyDeviceToHost );
     cudaMemcpy( neighbours, d_neighbours, sizeof( a2::node_t ) * m, cudaMemcpyDeviceToHost );
+    sg.neighbours = neighbours;
+    sg.neighbours_start_at = offsets;
 
-    std::cout << "m: " << sg_res->m << " n: " << sg_res->n << "\n";
-    int check = 1; 
+    std::cout << "m: " << sg.m << " n: " << sg.n << "\n";
+    int check = 1;
 
-    for (int idx = 0; idx < n+1; idx++)
+    for (int idx = 0; idx < n; idx++)
     {
-        if (offsets[idx] != res->neighbours_start_at[idx]) check = 0; 
-        std::cout << offsets[idx] << " ";
+        if (sg.neighbours_start_at[idx] != res->neighbours_start_at[idx]) 
+        {
+            std::cout<< "FAILED: " << idx << "\n";
+            check = 0; 
+        }
+        if (sg.neighbours_start_at[idx+1] != res->neighbours_start_at[idx+1])
+        {
+            check = 0; 
+            std::cout<< "FAILED: " << idx << "\n";
+        }
+        for (int jdx = sg.neighbours_start_at[idx]; jdx < sg.neighbours_start_at[idx]; jdx++)
+        {
+            int found = 0;
+            for (int kdx = sg.neighbours_start_at[idx]; kdx < sg.neighbours_start_at[idx]; kdx++)
+            {
+                if (sg.neighbours[jdx] == res->neighbours[kdx]) found = 1; 
+            }
+            if (found == 0){
+                std::cout << "FAILED: " << idx << "\n";
+                check = 0;
+            }
+        }
+
+
+        //std::cout << sg.neighbours_start_at[idx] << " ";
     }
-    std::cout << "\n";
+    //std::cout << sg.neighbours_start_at[n] << " ";
+    //std::cout << "\n";
 
     for (int idx = 0; idx < m; idx++)
     {
-        if (neighbours[idx] != res->neighbours[idx]) check = 0; 
-        std::cout << neighbours[idx] << " ";
+        //if (sg.neighbours[idx] != res->neighbours[idx]) check = 0; 
+        //std::cout << sg.neighbours[idx] << " ";
     }
     std::cout << "\nCorrect output: " << check << "\n";
 
@@ -205,8 +236,8 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 32;
-    std::size_t constexpr expected_degree = n >> 2;
+    std::size_t constexpr n = 1<<13 + 1;
+    std::size_t constexpr expected_degree = n >> 7;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
     std::size_t const m = graph.size();
@@ -246,8 +277,8 @@ int main()
     matmul(matrix, res, padded_n);
 #else
     // OpenBLAS implementation
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, padded_n, padded_n, padded_n, 1.0,
-                matrix, padded_n, matrix, padded_n, 1.0, res, padded_n);
+    //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, padded_n, padded_n, padded_n, 1.0,
+    //            matrix, padded_n, matrix, padded_n, 1.0, res, padded_n);
 #endif
 
     clamp(res, padded_n);
@@ -256,8 +287,8 @@ int main()
     res_csr.neighbours = (a2::node_t*) malloc(sizeof(a2::node_t) * m);
     res_csr.neighbours_start_at = (a2::node_t*) malloc(sizeof(a2::node_t) * padded_n+1);
 
-    std::size_t cur_idx = 0;
-    for (int idx = 0; idx < padded_n+1; idx++)
+    a2::node_t cur_idx = 0;
+    for (int idx = 0; idx < padded_n; idx++)
     {
         res_csr.neighbours_start_at[idx] = cur_idx;
         for (int jdx = 0; jdx < n; jdx++)
@@ -268,19 +299,20 @@ int main()
             }
         }
     }
+    res_csr.neighbours_start_at[padded_n] = cur_idx;
 
     for (int idx = 0; idx < padded_n+1; idx++)
     {
-        std::cout << res_csr.neighbours_start_at[idx] << " ";
+        //std::cout << res_csr.neighbours_start_at[idx] << " ";
     }
-    std::cout << "\n"; 
+    //std::cout << "\n"; 
 
     for (int idx = 0; idx < m; idx++)
     {
-        std::cout << res_csr.neighbours[idx] << " ";
+        //std::cout << res_csr.neighbours[idx] << " ";
     }
 
-    std::cout << "\n";
+    //std::cout << "\n";
 
     auto const end = std::chrono::high_resolution_clock::now();
 
