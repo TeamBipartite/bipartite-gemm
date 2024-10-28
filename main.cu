@@ -45,7 +45,7 @@ void run( DeviceGraph *g, csc485b::a2::edge_t const * d_edges, std::size_t m, st
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
     // neither does this!
-    csc485b::a2::gpu::two_hop_reachability( g, n );
+    //csc485b::a2::gpu::two_hop_reachability( g, n, get_padded_sz(m) );
 
     cudaDeviceSynchronize();
     auto const end = std::chrono::high_resolution_clock::now();
@@ -89,12 +89,12 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
     cudaMemcpy( dg_res.dest, dg.dest, sizeof( a2::node_t ) * dg.matrix_size(), cudaMemcpyDeviceToHost );
     for (int idx = 0; idx < n; idx++)
     {
-        //std::cout << idx << ": ";
+        std::cout << idx << ": ";
         for (int jdx = 0; jdx < n; jdx++)
         {
-            //std::cout << dg_res.dest[idx*n + jdx] << " ";
+            std::cout << dg_res.dest[idx*n + jdx] << " ";
         }
-        //std::cout << "\n";
+        std::cout << "\n";
     }
 
     bool check = true;
@@ -118,7 +118,7 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
 /**
  * Allocates space for a sparse graph and then runs the test code on it.
  */
-void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t m )
+void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t m, csc485b::a2::SparseGraph *res )
 {
     using namespace csc485b;
 
@@ -145,18 +145,21 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     cudaMemcpy( neighbours, d_neighbours, sizeof( a2::node_t ) * m, cudaMemcpyDeviceToHost );
 
     std::cout << "m: " << sg_res->m << " n: " << sg_res->n << "\n";
+    int check = 1; 
 
     for (int idx = 0; idx < n+1; idx++)
     {
+        if (offsets[idx] != res->neighbours_start_at[idx]) check = 0; 
         std::cout << offsets[idx] << " ";
     }
     std::cout << "\n";
 
     for (int idx = 0; idx < m; idx++)
     {
+        if (neighbours[idx] != res->neighbours[idx]) check = 0; 
         std::cout << neighbours[idx] << " ";
     }
-    std::cout << "\n";
+    std::cout << "\nCorrect output: " << check << "\n";
 
     // clean up
     cudaFree( d_neighbours );
@@ -202,7 +205,7 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 4;
+    std::size_t constexpr n = 32;
     std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
@@ -212,11 +215,11 @@ int main()
 
     // lazily echo out input graph
     
-    for( auto const& e : graph )
-    {
-        std::cout << "(" << e.x << "," << e.y << ") ";
-    }
-    std::cout << "\n";
+    //for( auto const& e : graph )
+    //{
+     //   std::cout << "(" << e.x << "," << e.y << ") ";
+    //}
+    //std::cout << "\n";
     
 
     // need to malloc since the matrix will exceed default stack size when n >= 1024
@@ -248,6 +251,37 @@ int main()
 #endif
 
     clamp(res, padded_n);
+
+    a2::SparseGraph res_csr{n, m};
+    res_csr.neighbours = (a2::node_t*) malloc(sizeof(a2::node_t) * m);
+    res_csr.neighbours_start_at = (a2::node_t*) malloc(sizeof(a2::node_t) * padded_n+1);
+
+    std::size_t cur_idx = 0;
+    for (int idx = 0; idx < padded_n+1; idx++)
+    {
+        res_csr.neighbours_start_at[idx] = cur_idx;
+        for (int jdx = 0; jdx < n; jdx++)
+        {
+            if (matrix[idx*padded_n + jdx] > 0)
+            {
+                res_csr.neighbours[cur_idx++] = jdx;
+            }
+        }
+    }
+
+    for (int idx = 0; idx < padded_n+1; idx++)
+    {
+        std::cout << res_csr.neighbours_start_at[idx] << " ";
+    }
+    std::cout << "\n"; 
+
+    for (int idx = 0; idx < m; idx++)
+    {
+        std::cout << res_csr.neighbours[idx] << " ";
+    }
+
+    std::cout << "\n";
+
     auto const end = std::chrono::high_resolution_clock::now();
 
     std::cout << "Reachability time (CPU): "
@@ -264,7 +298,7 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-    run_sparse( d_edges, padded_n, m );
+    run_sparse( d_edges, padded_n, m, &res_csr );
     //for (int idx = 0; idx < 10; idx++ )
     //    run_dense ( d_edges, padded_n, m, res );
 
