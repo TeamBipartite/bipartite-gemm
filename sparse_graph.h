@@ -224,11 +224,11 @@ void prefix_sum_naive( T *arr, std::size_t n, std::size_t stride)
 
 template<typename T>
  __global__
-void finish_prefix_sum(DenseGraph *g, T* block_sums, std::size_t n)
+void finish_prefix_sum(SparseGraph *g, T* block_sums, std::size_t n)
 {
     const std::size_t th_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (th_idx < n && blockIdx.x > 0){
-        g->adjacencyMatrix[th_idx] += block_sums[blockIdx.x -1 ];
+        g->neighbours_start_at[th_idx] += block_sums[blockIdx.x -1 ];
     }
 
     return;
@@ -252,8 +252,8 @@ __global__
 void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
-    scratch[global_th_id] = g->neighbours_start_at[global_th_id];
-    __syncthreads(); 
+    //scratch[global_th_id] = g->neighbours_start_at[global_th_id];
+    //__syncthreads(); 
 
     if (global_th_id < g->m)
     {
@@ -423,18 +423,20 @@ void bitstring_store( SparseGraph *g, uint32_t* bitstrings, node_t *scratch){
 void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::size_t n )
 {
     std::size_t const threads_per_block = 1024;
-    std::size_t const num_blocks =  ( n + threads_per_block - 1 ) / threads_per_block;
+    std::size_t const num_blocks =  ( (n+1) + threads_per_block - 1 ) / threads_per_block;
+    std::size_t const num_blocks_edges =  ( m + threads_per_block - 1 ) / threads_per_block;
 
     node_t *tmp_blk_sums, *tmp_prefix_sums;
     cudaMalloc( (void**) &tmp_blk_sums, sizeof(node_t) * num_blocks );
 
-    histogram<<< num_blocks, threads_per_block >>>( edge_list, m, g );
+    histogram<<< num_blocks_edges, threads_per_block >>>( edge_list, m, g );
 
 
     // prefix_sum
+    cudaDeviceSynchronize();
     prefix_sum<<< num_blocks, threads_per_block >>>( g, tmp_blk_sums, n+1 );
-    //single_block_prefix_sum<<< 1 , threads_per_block >>>( tmp_blk_sums, num_blocks );
-    //finish_prefix_sum<<< num_blocks, threads_per_block >>>( tmp_blk_sums, tmp_blk_sums, input.size() );
+    single_block_prefix_sum<<< 1 , threads_per_block >>>( tmp_blk_sums, num_blocks );
+    finish_prefix_sum<<< num_blocks, threads_per_block >>>( g, tmp_blk_sums, n+1 );
 
     cudaFree(tmp_blk_sums);
 
@@ -442,10 +444,12 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
 
 
     // store
+    cudaDeviceSynchronize();
     cudaMalloc( (void**) &tmp_prefix_sums, sizeof(node_t) * n );
-    store<<< num_blocks, threads_per_block >>>(  g, edge_list,
+    create_scratch<<< num_blocks, threads_per_block >>>( g, tmp_prefix_sums);
+    store<<< num_blocks_edges, threads_per_block >>>(  g, edge_list,
                                                        tmp_prefix_sums );
-    
+    cudaFree(tmp_prefix_sums); 
     return;
 }
 

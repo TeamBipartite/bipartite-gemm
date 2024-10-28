@@ -153,7 +153,7 @@ void two_hop_reachability_kernel( DenseGraph *g )
     return;
 }
 
-void two_hop_reachability( DenseGraph *g, std::size_t n )
+void two_hop_reachability( DenseGraph *g, std::size_t n, std::size_t m )
 {
     two_hop_reachability_kernel<<< dim3{n/32, n/32, n/32}, dim3{32, 32, 1} >>>(g);
 }
