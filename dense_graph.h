@@ -90,8 +90,6 @@ std::size_t warp_sum(std::size_t th_val)
 __global__
 void two_hop_reachability_kernel( DenseGraph *g )
 {
-    // IMPLEMENT ME!
-    // square adjacencyMatrix
     // Remember: Multiple z dimensions at block-level ONLY
 
     // A
@@ -103,7 +101,6 @@ void two_hop_reachability_kernel( DenseGraph *g )
     std::size_t b_row = blockIdx.z * blockDim.y + threadIdx.y;
 
     // C
-    std::size_t c_col = blockIdx.x * blockDim.x + threadIdx.x;
     std::size_t c_row = blockIdx.y * blockDim.y + threadIdx.y;
 
     // Copy tile of B (transposed) into smem
@@ -119,10 +116,6 @@ void two_hop_reachability_kernel( DenseGraph *g )
     {
       // Perform single cell product of a and b for thread
       std::size_t product =  a_val * smem[(b_tile_col * blockDim.x) + threadIdx.x];
-      //std::size_t product =  a_val * smem[(threadIdx.x * blockDim.x) + b_tile_col];
-
-      // non-smem version
-      //std::size_t product =  a_val * g->adjacencyMatrix[(a_col* g->n) + (blockIdx.x * blockDim.x)+ b_tile_col];
 
       // make sure that all accesses to smem are complete before we perform warp_sum
       __syncwarp();
@@ -153,9 +146,15 @@ void two_hop_reachability_kernel( DenseGraph *g )
     return;
 }
 
+/**
+ * @brief wrapper host function for two_hop_reachability (needed since this cannot
+ *        be a kerner for sparse
+ */
 void two_hop_reachability( DenseGraph *g, std::size_t n, std::size_t m )
 {
-    two_hop_reachability_kernel<<< dim3{n/32, n/32, n/32}, dim3{32, 32, 1} >>>(g);
+    uint32_t block_dim_sz = (uint32_t)(n / 32);
+    two_hop_reachability_kernel<<< dim3{block_dim_sz, block_dim_sz, block_dim_sz}, 
+                                   dim3{32, 32, 1} >>>(g);
 }
 
 } // namespace gpu

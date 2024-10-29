@@ -252,8 +252,6 @@ __global__
 void store( SparseGraph *g, const edge_t *edges, node_t *scratch)
 {
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
-    //scratch[global_th_id] = g->neighbours_start_at[global_th_id];
-    //__syncthreads(); 
 
     if (global_th_id < g->m)
     {
@@ -274,7 +272,6 @@ void invert_neighbours( SparseGraph *g, node_t *neighbours_inverse){
     const std::size_t warp_id = threadIdx.y;
     const std::size_t lane_id = threadIdx.x;
     const std::size_t this_vertex_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    node_t this_vertex = g->neighbours[this_vertex_idx];
     const std::size_t vertex_lower_bound = blockIdx.y * blockDim.y + threadIdx.y;
     std::size_t vertex_upper_bound = vertex_lower_bound;
     std::size_t n = g->n;
@@ -321,8 +318,10 @@ void populate_bitstring( SparseGraph *g, node_t *alpha, uint32_t *bitstrings)
         node_t endpoint1 = alpha[idx_a];
         node_t endpoint2 = alpha[idx_b];
         std::size_t bit_idx = endpoint1*g->n + endpoint2;
-        atomicOr(bitstrings + (endpoint1), 0x8000 >> (endpoint2));
-        atomicOr(bitstrings + (endpoint2), 0x8000 >> (endpoint1));
+        atomicOr(bitstrings + (bit_idx/32), 0x8000 >> (bit_idx%32));
+
+        std::size_t bit_idx_rev = endpoint2*g->n + endpoint1;
+        atomicOr(bitstrings + (bit_idx_rev/32), 0x8000 >> (bit_idx_rev%32));
         
         //std::size_t bit_idx_rev = endpoint2*g->n + endpoint1;
         //bitstrings[bit_idx_rev / 8] |= 1 << (bit_idx_rev % 8);
@@ -348,7 +347,6 @@ void get_global_counts( SparseGraph *g, uint32_t *bitstrings )
     
 }
 
-// John
 __global__
 void zero_array( uint32_t *arr, std::size_t n )
 {
@@ -384,9 +382,8 @@ void create_scratch( SparseGraph *g, node_t *scratch)
 
 }
 
-// Emily
-__global__
 // ASSUMPTION: We have >= n*n threads
+__global__
 void bitstring_store( SparseGraph *g, uint32_t* bitstrings, node_t *scratch){
     /*
         - bitstrings is an nxn array which means that we have nxn threads
@@ -422,9 +419,10 @@ void bitstring_store( SparseGraph *g, uint32_t* bitstrings, node_t *scratch){
 //__global__
 void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::size_t n )
 {
-    std::size_t const threads_per_block = 1024;
-    std::size_t const num_blocks =  ( (n+1) + threads_per_block - 1 ) / threads_per_block;
-    std::size_t const num_blocks_edges =  ( m + threads_per_block - 1 ) / threads_per_block;
+    // Cannot be longs as CUDA will just cast down to 32bit
+    uint32_t const threads_per_block = 1024;
+    uint32_t const num_blocks =  ( (n+1) + threads_per_block - 1 ) / threads_per_block;
+    uint32_t const num_blocks_edges =  ( m + threads_per_block - 1 ) / threads_per_block;
 
     node_t *tmp_blk_sums, *tmp_prefix_sums;
     cudaMalloc( (void**) &tmp_blk_sums, sizeof(node_t) * num_blocks );
@@ -439,8 +437,6 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
     finish_prefix_sum<<< num_blocks, threads_per_block >>>( g, tmp_blk_sums, n+1 );
 
     cudaFree(tmp_blk_sums);
-
-
 
 
     // store
@@ -459,20 +455,23 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
   */
 void two_hop_reachability( SparseGraph *g, std::size_t n, std::size_t m )
 {
+    // Cannot be longs as CUDA will just cast down to 32bit
+    uint32_t const threads_per_block = 1024;
+    uint32_t const num_blocks =  ( (n+1) + threads_per_block - 1 ) / threads_per_block;
+    uint32_t const num_blocks_edges =  ( m + threads_per_block - 1 ) / threads_per_block;
+
     node_t *d_alpha;
-    uint8_t *d_bitstrings, *bitstrings;
+    uint8_t *d_bitstrings;//, *bitstrings;
     cudaMalloc( (void**)&d_alpha,    sizeof( node_t ) * m);
     cudaMalloc( (void**)&d_bitstrings, n*n/sizeof( uint8_t) );
     node_t* d_scratch;
     cudaMalloc( (void**) &d_scratch, sizeof( node_t )*n);
 
-    std::size_t const threads_per_block = 1024;
-    std::size_t const num_blocks =  ( n + threads_per_block - 1 ) / threads_per_block;
-
-    invert_neighbours<<< dim3{ n/32, m/32, 1}, dim3{32, 32, 1}>>>( g, d_alpha); 
+    invert_neighbours<<< dim3{ num_blocks, num_blocks_edges, 1}, dim3{32, 32, 1}>>>( g, d_alpha); 
     zero_array<<< 1, n*n/32>>>( (uint32_t*)d_bitstrings, n*n/32);
-    populate_bitstring<<< dim3{ m/32, m/64, 1}, dim3{32, 32, 1}>>>( g, d_alpha, (uint32_t*)d_bitstrings);
-    zero_array<<< num_blocks, threads_per_block>>>( g, n+1);
+    populate_bitstring<<< dim3{ num_blocks_edges, num_blocks_edges/2, 1}, 
+                          dim3{32, 32, 1}>>>( g, d_alpha, (uint32_t*)d_bitstrings);
+    zero_array<<< num_blocks, threads_per_block>>>( g, n+1 );
     get_global_counts<<< num_blocks, threads_per_block >>>( g, (uint32_t*)d_bitstrings);
     create_scratch<<< num_blocks, threads_per_block >>>( g, d_scratch);
     bitstring_store<<< num_blocks, threads_per_block >>>(g, (uint32_t*)d_bitstrings, d_scratch);
