@@ -318,18 +318,11 @@ void get_global_counts( SparseGraph *g, uint8_t* bitstrings );
 
 // Emily
 __global__
-// ASSUMPTION: We have >= n*n threads since |bitstrings| = nxn
-/*
-    0 1        0 1 2 3
-    ---        --------
-0 | a b  --->  a b c d
-1 | c d        row = flat_array_idx / n
-               col = flat_array_idx % n
-*/
+// ASSUMPTION: We have >= n*n threads
 void bitstring_store( SparseGraph *g, uint8_t* bitstrings, node_t *scratch){
     /*
         - bitstrings is an nxn array which means that we have nxn threads
-        - The row in bitstring determines which idx is start_at a thread will use
+        - The row in bitstring determines which idx in start_at a thread will use
     */
     const std::size_t global_th_id = blockIdx.x * blockDim.x + threadIdx.x;
     const std::size_t n = g->n;
@@ -337,7 +330,7 @@ void bitstring_store( SparseGraph *g, uint8_t* bitstrings, node_t *scratch){
     /*
         Only copy to scratch if you are thread in row zero to promote memory coalescing 
         Not using smem, so no need to worry about bank conflicts
-        Since bitstrings is a flat array of size nxn, only the first n threads to write to scratch
+        Since bitstrings is a flat array of size nxn, only the first n threads need to write to scratch
     */ 
     if (global_th_id < n){
         scratch[global_th_id] = g->neighbours_start_at[global_th_id ];
@@ -350,8 +343,11 @@ void bitstring_store( SparseGraph *g, uint8_t* bitstrings, node_t *scratch){
     // other vertex is the column!
     node_t other_vertex = global_th_id % n;
 
+    const std::size_t bitstring_idx = global_th_id / 8;
+    const std::size_t bit_idx = global_th_id % 8; // where 0 is treated as msb and 7 is treated as the lsb
+
     // Only consider valid edges and exclude self loops!
-    if (global_th_id < n*n && this_vertex != other_vertex && bitstrings[global_th_id]){
+    if (global_th_id < n*n && this_vertex != other_vertex && ((bitstrings[bitstring_idx] << bit_idx) & 0x80 )){
 
         int pos = atomicAdd(scratch + this_vertex, 1);
         g->neighbours[pos] = other_vertex;
@@ -386,12 +382,13 @@ void build_graph( SparseGraph *g, edge_t const * edge_list, std::size_t m, std::
     cudaFree(tmp_blk_sums);
 
 
+
+
     // store
     cudaMalloc( (void**) &tmp_prefix_sums, sizeof(node_t) * n );
     store<<< num_blocks, threads_per_block >>>(  g, edge_list,
                                                        tmp_prefix_sums );
-
-    cudaFree( (void**) tmp_prefix_sums);
+    
     return;
 }
 
