@@ -101,6 +101,9 @@ void two_hop_reachability_kernel( DenseGraph *g )
     std::size_t b_row = blockIdx.z * blockDim.y + threadIdx.y;
 
     // C
+#ifdef USE_FULL_MULTIPLY
+    std::size_t c_col = blockIdx.x * blockDim.x + threadIdx.x;
+#endif
     std::size_t c_row = blockIdx.y * blockDim.y + threadIdx.y;
 
     // Copy tile of B (transposed) into smem

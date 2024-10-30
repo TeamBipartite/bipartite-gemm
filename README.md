@@ -1,6 +1,13 @@
 # CSC485b Fall 2024 A2
 Johnathan Warawa & Emily Martins
 
+# Prerequisites
+You should have a functional CUDA environment installed with a GPU of compute
+capability 7.5 or higher. Our code is best optimized for the Turing architecture,
+but has been tested to work on Ampere.
+
+OpenBLAS is helpful for checking correctness of output, but not necessary.
+See the 'Build' section for more details.
 
 # Build
 A makefile is provided in  the top-level directory which handles building the application. 
@@ -28,6 +35,8 @@ The following options may also be specified using environment variables:
    `just-set-one` implementation.
 * `USE_WARP_PRIMITIVES=yes`: If using full multiply, set to `no` to use an
   unoptimized solution which does not exploit warp primitives.
+
+A clean is required before switching configurations.
 
 # Run
 
