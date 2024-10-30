@@ -40,4 +40,4 @@ A clean is required before switching configurations.
 
 # Run
 
-A single executable, `a2` is producted. Simply run this file.
+A single executable, `a2` is generated. Simply run this file.
