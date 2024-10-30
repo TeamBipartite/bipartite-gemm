@@ -76,7 +76,7 @@ std::size_t warp_sum(std::size_t th_val)
       if ((0x1 << th_id) & shuffle_mask){
         th_val += new_val;
       }
-      shuffle_mask >>= 1;
+      shuffle_mask >>= stride;
   }
 
   return th_val;
@@ -108,7 +108,6 @@ void two_hop_reachability_kernel( DenseGraph *g )
 
     // Copy tile of B (transposed) into smem
     __shared__ a2::node_t smem[1024];
-    //smem[(threadIdx.y * blockDim.y) + threadIdx.x ] = g->adjacencyMatrix[(b_row * g->n) + b_col];
     smem[(threadIdx.x * blockDim.x) + threadIdx.y ] = g->adjacencyMatrix[(b_row * g->n) + b_col];
     __syncthreads();
 

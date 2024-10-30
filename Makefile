@@ -1,9 +1,16 @@
 CXXFLAGS=-O3 -g -std=c++20
 USE_WARP_PRIMITIVES?=yes
+USE_FULL_MULTIPLY?=no
+
+ifeq ($(USE_FULL_MULTIPLY),yes)
+CXXFLAGS+= -DUSE_FULL_MULTIPLY
 
 ifeq ($(USE_WARP_PRIMITIVES),no)
 CXXFLAGS+= -DNO_WARP_PRIMITIVES
-endif
+endif # USE_WARP_PRIMITIVES
+
+endif # USE_FULL_MULTIPLY
+
 
 ifeq ($(USE_OPENBLAS),no)
 CXXFLAGS+= -DNO_OPENBLAS
@@ -14,7 +21,7 @@ endif
 # set up thread count for multithreaded CPU matrix multiply
 OPENBLAS_NUM_THREADS?="$$(nproc)"
 
-# Default value for Tesla T4. Use TARGET=sm_86 for RTX3060
+# Default value for Turing T4. Use TARGET=sm_86 for RTX3060
 TARGET?=sm_75
 
 all: a2
