@@ -122,7 +122,7 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
 /**
  * Allocates space for a sparse graph and then runs the test code on it.
  */
-void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t m, csc485b::a2::SparseGraph *res )
+void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t m, float* matrix)
 {
     using namespace csc485b;
 
@@ -137,7 +137,6 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     a2::SparseGraph *d_sg;
     cudaMalloc( (void**)&d_sg, sizeof( a2::SparseGraph ) );
     cudaMemcpy( d_sg, &sg, sizeof( a2::SparseGraph ), cudaMemcpyHostToDevice );
-    //a2::SparseGraph d_sg{ n, m, d_offsets, d_neighbours };
 
     run( d_sg, d_edges, m, n );
 
@@ -152,16 +151,51 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     sg.neighbours_start_at = offsets;
 
     std::cout << "m: " << sg.m << " n: " << sg.n << "\n";
-    int check = 1;
+    
 
+         // Print out CSR
+        a2::SparseGraph res_csr{n, m};
+        res_csr.neighbours = (a2::node_t*) malloc(sizeof(a2::node_t) * m);
+        res_csr.neighbours_start_at = (a2::node_t*) malloc(sizeof(a2::node_t) * n+1);
+
+        a2::node_t cur_idx = 0;
+        for (int idx = 0; idx < n; idx++)
+        {
+            res_csr.neighbours_start_at[idx] = cur_idx;
+            for (int jdx = 0; jdx < n; jdx++)
+            {
+                if (matrix[idx*n + jdx] > 0)
+                {
+                    res_csr.neighbours[cur_idx++] = jdx;
+                }
+            }
+        }
+        res_csr.neighbours_start_at[n] = cur_idx;
+        
+        for (int idx = 0; idx < n+1; idx++)
+        {
+            std::cout << res_csr.neighbours_start_at[idx] << " ";
+        }
+        std::cout << "\n"; 
+
+        for (int idx = 0; idx < m; idx++)
+        {
+            std::cout << res_csr.neighbours[idx] << " ";
+        }
+
+        std::cout << "\n";
+        
+
+    // CSR Validation
+    int check = 1;
     for (int idx = 0; idx < n; idx++)
     {
-        if (sg.neighbours_start_at[idx] != res->neighbours_start_at[idx]) 
+        if (sg.neighbours_start_at[idx] != res_csr.neighbours_start_at[idx]) 
         {
             std::cout<< "FAILED: " << idx << "\n";
             check = 0; 
         }
-        if (sg.neighbours_start_at[idx+1] != res->neighbours_start_at[idx+1])
+        if (sg.neighbours_start_at[idx+1] != res_csr.neighbours_start_at[idx+1])
         {
             check = 0; 
             std::cout<< "FAILED: " << idx << "\n";
@@ -171,25 +205,15 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
             int found = 0;
             for (int kdx = sg.neighbours_start_at[idx]; kdx < sg.neighbours_start_at[idx]; kdx++)
             {
-                if (sg.neighbours[jdx] == res->neighbours[kdx]) found = 1; 
+                if (sg.neighbours[jdx] == res_csr.neighbours[kdx]) found = 1; 
             }
             if (found == 0){
                 std::cout << "FAILED: " << idx << "\n";
                 check = 0;
             }
         }
-
-
-        //std::cout << sg.neighbours_start_at[idx] << " ";
     }
-    //std::cout << sg.neighbours_start_at[n] << " ";
-    //std::cout << "\n";
 
-    for (int idx = 0; idx < m; idx++)
-    {
-        //if (sg.neighbours[idx] != res->neighbours[idx]) check = 0; 
-        //std::cout << sg.neighbours[idx] << " ";
-    }
     std::cout << "\nCorrect output: " << check << "\n";
 
     // clean up
@@ -198,6 +222,8 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     cudaFree( d_sg );
     free(offsets);
     free(neighbours);
+    // free(res_csr.neighbours);
+    //free(res_csr.neighbours_start_at);
 }
 
 void matmul(float *mat, float *res, std::size_t n)
@@ -236,8 +262,8 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 1<<13 + 1;
-    std::size_t constexpr expected_degree = n >> 7;
+    std::size_t constexpr n = 4096;
+    std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
     std::size_t const m = graph.size();
@@ -246,13 +272,13 @@ int main()
 
     // lazily echo out input graph
     
-    //for( auto const& e : graph )
-    //{
-     //   std::cout << "(" << e.x << "," << e.y << ") ";
-    //}
-    //std::cout << "\n";
+    for( auto const& e : graph )
+    {
+       //std::cout << "(" << e.x << "," << e.y << ") ";
+    }
+    std::cout << "\n";
     
-
+    // Build adjacency matrix for testing
     // need to malloc since the matrix will exceed default stack size when n >= 1024
     float *matrix, *res;
     matrix = (float*) malloc(sizeof(float) * padded_n * padded_n);
@@ -270,58 +296,17 @@ int main()
 
     //print_matrix(matrix, padded_n);
 
-    auto const reachability_start = std::chrono::high_resolution_clock::now();
-
 #ifdef NO_OPENBLAS
     // naive n^3 implementation
     matmul(matrix, res, padded_n);
 #else
     // OpenBLAS implementation
     //cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, padded_n, padded_n, padded_n, 1.0,
-    //            matrix, padded_n, matrix, padded_n, 1.0, res, padded_n);
+      //         matrix, padded_n, matrix, padded_n, 1.0, res, padded_n);
 #endif
 
     clamp(res, padded_n);
 
-    a2::SparseGraph res_csr{n, m};
-    res_csr.neighbours = (a2::node_t*) malloc(sizeof(a2::node_t) * m);
-    res_csr.neighbours_start_at = (a2::node_t*) malloc(sizeof(a2::node_t) * padded_n+1);
-
-    a2::node_t cur_idx = 0;
-    for (int idx = 0; idx < padded_n; idx++)
-    {
-        res_csr.neighbours_start_at[idx] = cur_idx;
-        for (int jdx = 0; jdx < n; jdx++)
-        {
-            if (matrix[idx*padded_n + jdx] > 0)
-            {
-                res_csr.neighbours[cur_idx++] = jdx;
-            }
-        }
-    }
-    res_csr.neighbours_start_at[padded_n] = cur_idx;
-
-    for (int idx = 0; idx < padded_n+1; idx++)
-    {
-        //std::cout << res_csr.neighbours_start_at[idx] << " ";
-    }
-    //std::cout << "\n"; 
-
-    for (int idx = 0; idx < m; idx++)
-    {
-        //std::cout << res_csr.neighbours[idx] << " ";
-    }
-
-    //std::cout << "\n";
-
-    auto const end = std::chrono::high_resolution_clock::now();
-
-    std::cout << "Reachability time (CPU): "
-              << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
-              << " us"
-              << std::endl;
-
-    //std::cout << "Correct output\n";
     //print_matrix(res, padded_n);
 
     // allocate and memcpy input to device
@@ -330,11 +315,11 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-    run_sparse( d_edges, padded_n, m, &res_csr );
-    //for (int idx = 0; idx < 10; idx++ )
-    //    run_dense ( d_edges, padded_n, m, res );
+    run_sparse( d_edges, padded_n, m, matrix );
+    //run_dense ( d_edges, padded_n, m, res );
 
     free(res);
     free(matrix);
+    
     return EXIT_SUCCESS;
 }
