@@ -29,9 +29,8 @@ struct DenseGraph
 namespace gpu {
 
 /**
- * Constructs a DenseGraph from an input edge list of m edges.
- *
- * @pre The pointers in DenseGraph g have already been allocated.
+ * add_neighbour_pair
+ * @brief Builds adjacency matrix for for g
  */
 __global__
 void add_neighbour_pair( DenseGraph *g, edge_t const * edge_list, std::size_t m)
@@ -52,6 +51,11 @@ void add_neighbour_pair( DenseGraph *g, edge_t const * edge_list, std::size_t m)
     return;
 }
 
+/**
+ * Constructs a DenseGraph from an input edge list of m edges.
+ *
+ * @pre The pointers in DenseGraph g have already been allocated.
+ */
 void build_graph( DenseGraph *g, edge_t const * edge_list, std::size_t m, std::size_t n )
 {
 
@@ -62,6 +66,10 @@ void build_graph( DenseGraph *g, edge_t const * edge_list, std::size_t m, std::s
     return;
 }
 
+/**
+ * warp_sum
+ * @brief Perform a warp sum reduction using given th_val
+ */
 __device__
 std::size_t warp_sum(std::size_t th_val)
 {
@@ -140,10 +148,7 @@ void two_hop_reachability_kernel( DenseGraph *g )
     }
 
 #ifdef USE_FULL_MULTIPLY
-    if (c_row == c_col)
-        g->dest[(c_row * g->n) + c_col] = 0;
-    else if ( g->dest[(c_row * g->n) + c_col])
-        g->dest[(c_row * g->n) + c_col] = 1;
+    g->dest[(c_row * g->n) + c_col] = g->dest[(c_row * g->n) + c_col] && !(c_row == c_col);
 #endif
     return;
 }
