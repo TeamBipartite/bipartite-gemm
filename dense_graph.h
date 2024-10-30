@@ -140,10 +140,7 @@ void two_hop_reachability_kernel( DenseGraph *g )
     }
 
 #ifdef USE_FULL_MULTIPLY
-    if (c_row == c_col)
-        g->dest[(c_row * g->n) + c_col] = 0;
-    else if ( g->dest[(c_row * g->n) + c_col])
-        g->dest[(c_row * g->n) + c_col] = 1;
+    g->dest[(c_row * g->n) + c_col] = g->dest[(c_row * g->n) + c_col] && !(c_row == c_col);
 #endif
     return;
 }

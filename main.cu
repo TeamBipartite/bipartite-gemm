@@ -91,12 +91,12 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
     cudaMemcpy( dg_res.dest, dg.dest, sizeof( a2::node_t ) * dg.matrix_size(), cudaMemcpyDeviceToHost );
     for (int idx = 0; idx < n; idx++)
     {
-        std::cout << idx << ": ";
+        //std::cout << idx << ": ";
         for (int jdx = 0; jdx < n; jdx++)
         {
-            std::cout << dg_res.dest[idx*n + jdx] << " ";
+            //std::cout << dg_res.dest[idx*n + jdx] << " ";
         }
-        std::cout << "\n";
+        //std::cout << "\n";
     }
 
     bool check = true;
@@ -231,19 +231,25 @@ void clamp(float *mat, std::size_t n)
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
     using namespace csc485b;
+    char print_res = 0;
+
+    if (argc > 1 && !strncmp(argv[1], "-p", 3))
+        print_res = 1;    
     
     // Create input
-    std::size_t constexpr n = 1<<13 + 1;
-    std::size_t constexpr expected_degree = n >> 7;
+    std::size_t constexpr n = 128;
+    std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
     std::size_t const m = graph.size();
 
     std::size_t padded_n = get_padded_sz(n);
 
+    if (print_res)
+    {
     // lazily echo out input graph
     
     //for( auto const& e : graph )
@@ -251,9 +257,10 @@ int main()
      //   std::cout << "(" << e.x << "," << e.y << ") ";
     //}
     //std::cout << "\n";
-    
+    }
 
     // need to malloc since the matrix will exceed default stack size when n >= 1024
+    // note that we are using float instead of int for compatability with OpenBLAS
     float *matrix, *res;
     matrix = (float*) malloc(sizeof(float) * padded_n * padded_n);
     res = (float*) malloc(sizeof(float) * padded_n * padded_n);
@@ -321,8 +328,11 @@ int main()
               << " us"
               << std::endl;
 
+    if (print_res)
+    {
     //std::cout << "Correct output\n";
     //print_matrix(res, padded_n);
+    }
 
     // allocate and memcpy input to device
     a2::edge_t * d_edges;
@@ -330,9 +340,9 @@ int main()
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
-    run_sparse( d_edges, padded_n, m, &res_csr );
+    //run_sparse( d_edges, padded_n, m, &res_csr );
     //for (int idx = 0; idx < 10; idx++ )
-    //    run_dense ( d_edges, padded_n, m, res );
+        run_dense ( d_edges, padded_n, m, res );
 
     free(res);
     free(matrix);
