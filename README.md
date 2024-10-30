@@ -16,14 +16,18 @@ $ make TARGET=sm_86
 ```
 
 The following options may also be specified using environment variables:
+
     - `USE_OPENBLAS=yes`: By default, the OpenBLAS library is called to
       perform a CPU matrix multiplication to serve as a baseline to check for
       correctness. If you do not have OpenBLAS on your system, set this variable
       to `no` to use a naive provided n^3 CPU implementation.
     - `OPENBLAS_NUM_THREADS=$(nproc)`: If `USE_OPENBLAS=yes`, this option can be
       specified to reduce the number of threads used by OpenBLAS. 
-    - `USE_WARP_PRIMITIVES=yes`: Set to `no` to use an unoptimized solution
-      which does not exploit warp primitives.
+    - `USE_FULL_MULTIPLY=no`: Set to `yes` to use the less-optimized full-multiply
+       dense two_hop_reachability, otherwise use the more-optimized 
+       `just-set-one` implementation.
+    - `USE_WARP_PRIMITIVES=yes`: If using full multiply, set to `no` to use an
+      unoptimized solution which does not exploit warp primitives.
 
 # Run
 
