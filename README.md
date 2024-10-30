@@ -44,5 +44,5 @@ A clean is required before switching configurations.
 A single executable, `a2` is generated. Simply run this file.
 
 For debugging and output inspection, `a2` provides a `-p` argument. When this 
-argument is provided in addition to a printed output of the input edges, and expected
-outputs for both dense and CSR.
+argument is provided, a printed output of the generated edge list in addition to
+both expected and actual outputs for both dense and CSR implementations is produced.
