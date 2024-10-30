@@ -222,8 +222,8 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
     cudaFree( d_sg );
     free(offsets);
     free(neighbours);
-    // free(res_csr.neighbours);
-    //free(res_csr.neighbours_start_at);
+    free(res_csr.neighbours);
+    free(res_csr.neighbours_start_at);
 }
 
 void matmul(float *mat, float *res, std::size_t n)
