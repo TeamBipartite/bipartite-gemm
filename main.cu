@@ -91,6 +91,7 @@ void run_dense( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t 
 
     if (print_results)
     {
+        std::cout << "Actual output:" << "\n";
         for (int idx = 0; idx < n; idx++)
         {
             std::cout << idx << ": ";
@@ -215,10 +216,10 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
             check = 0; 
             std::cout<< "FAILED: " << idx << "\n";
         }
-        for (int jdx = sg.neighbours_start_at[idx]; jdx < sg.neighbours_start_at[idx]; jdx++)
+        for (int jdx = sg.neighbours_start_at[idx]; jdx < sg.neighbours_start_at[idx+1]; jdx++)
         {
             int found = 0;
-            for (int kdx = sg.neighbours_start_at[idx]; kdx < sg.neighbours_start_at[idx]; kdx++)
+            for (int kdx = sg.neighbours_start_at[idx]; kdx < sg.neighbours_start_at[idx+1]; kdx++)
             {
                 if (sg.neighbours[jdx] == res_csr.neighbours[kdx]) found = 1; 
             }
@@ -227,6 +228,23 @@ void run_sparse( csc485b::a2::edge_t const * d_edges, std::size_t n, std::size_t
                 check = 0;
             }
         }
+    }
+
+    // print CSR
+    if (print_results)
+    {
+        std::cout << "Actual output:" << "\n";
+        for (int idx = 0; idx < n+1; idx++)
+        {
+            std::cout << sg.neighbours_start_at[idx] << " ";
+        }
+        std::cout << "\n";
+
+        for (int jdx = 0; jdx < m; jdx++)
+        {
+            std::cout << sg.neighbours[jdx] << " ";
+        }
+        std::cout << "\n";
     }
 
     std::cout << "Correct output: " << check << "\n";
@@ -281,7 +299,7 @@ int main(int argc, char **argv)
         print_res = 1;    
     
     // Create input
-    std::size_t constexpr n = 32;
+    std::size_t constexpr n = 4096;
     std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
@@ -334,12 +352,12 @@ int main(int argc, char **argv)
     cudaMemcpyAsync( d_edges, graph.data(), sizeof( a2::edge_t ) * m, cudaMemcpyHostToDevice );
 
     // run your code!
+    std::cout << "DENSE:" << "\n";
     if (print_res)
     {
-        std::cout << "Expected output" << "\n";
+        std::cout << "Expected output:" << "\n";
         print_matrix(res, padded_n);
     }
-    std::cout << "DENSE:" << "\n";
     run_dense ( d_edges, padded_n, m, res, print_res );
     
     std::cout << "\n" << "SPARSE:" << "\n";

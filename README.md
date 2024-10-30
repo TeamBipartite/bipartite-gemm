@@ -32,7 +32,8 @@ The following options may also be specified using environment variables:
   specified to reduce the number of threads used by OpenBLAS. 
 * `USE_FULL_MULTIPLY=no`: Set to `yes` to use the less-optimized full-multiply
    dense two_hop_reachability, otherwise use the more-optimized 
-   `just-set-one` implementation.
+   `just-set-one` implementation (the one described as 'clever' in our video) for
+   dense.
 * `USE_WARP_PRIMITIVES=yes`: If using full multiply, set to `no` to use an
   unoptimized solution which does not exploit warp primitives.
 
@@ -41,3 +42,7 @@ A clean is required before switching configurations.
 # Run
 
 A single executable, `a2` is generated. Simply run this file.
+
+For debugging and output inspection, `a2` provides a `-p` argument. When this 
+argument is provided in addition to a printed output of the input edges, and expected
+outputs for both dense and CSR.
