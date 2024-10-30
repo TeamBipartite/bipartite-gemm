@@ -37,15 +37,12 @@ void run( DeviceGraph *g, csc485b::a2::edge_t const * d_edges, std::size_t m, st
     cudaDeviceSynchronize();
     auto const build_start = std::chrono::high_resolution_clock::now();
 
-    // this code doesn't work yet!
-    //csc485b::a2::gpu::build_graph<<< 1, 1 >>>( g, d_edges, m );
     csc485b::a2::gpu::build_graph( g, d_edges, m, n );
 
     cudaDeviceSynchronize();
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
-    // neither does this!
-    //csc485b::a2::gpu::two_hop_reachability( g, n, get_padded_sz(m) );
+    csc485b::a2::gpu::two_hop_reachability( g, n, get_padded_sz(m) );
 
     cudaDeviceSynchronize();
     auto const end = std::chrono::high_resolution_clock::now();
@@ -262,7 +259,7 @@ int main()
     using namespace csc485b;
     
     // Create input
-    std::size_t constexpr n = 4096;
+    std::size_t constexpr n = 8192;
     std::size_t constexpr expected_degree = n >> 2;
 
     a2::edge_list_t const graph = a2::generate_graph( n, n * expected_degree );
