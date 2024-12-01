@@ -24,10 +24,10 @@ OPENBLAS_NUM_THREADS?="$$(nproc)"
 # Default value for Turing T4. Use TARGET=sm_86 for RTX3060
 TARGET?=sm_75
 
-all: a2
+all: a4
 
-a2: main.cu dense_graph.h sparse_graph.h data_types.h data_generator.h cuda_common.h 
-	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o a2 main.cu -arch=$(TARGET) $(CXXFLAGS)
+a4: main.cu dense_graph.h sparse_graph.h data_types.h data_generator.h cuda_common.h
+	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o a4 main.cu -arch=$(TARGET) $(CXXFLAGS)
 
 clean:
-	rm -f a2
+	rm -f a4

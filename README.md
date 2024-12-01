@@ -1,4 +1,4 @@
-# CSC485b Fall 2024 A2
+# CSC485b Fall 2024 A4
 Johnathan Warawa & Emily Martins
 
 # Prerequisites
@@ -41,8 +41,8 @@ A clean is required before switching configurations.
 
 # Run
 
-A single executable, `a2` is generated. Simply run this file.
+A single executable, `a4` is generated. Simply run this file.
 
-For debugging and output inspection, `a2` provides a `-p` argument. When this 
+For debugging and output inspection, `a4` provides a `-p` argument. When this
 argument is provided, a printed output of the generated edge list in addition to
 both expected and actual outputs for both dense and CSR implementations is produced.
