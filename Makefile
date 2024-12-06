@@ -1,16 +1,4 @@
 CXXFLAGS=-O3 -g -std=c++20
-USE_WARP_PRIMITIVES?=yes
-USE_FULL_MULTIPLY?=no
-
-ifeq ($(USE_FULL_MULTIPLY),yes)
-CXXFLAGS+= -DUSE_FULL_MULTIPLY
-
-ifeq ($(USE_WARP_PRIMITIVES),no)
-CXXFLAGS+= -DNO_WARP_PRIMITIVES
-endif # USE_WARP_PRIMITIVES
-
-endif # USE_FULL_MULTIPLY
-
 
 ifeq ($(USE_OPENBLAS),no)
 CXXFLAGS+= -DNO_OPENBLAS
@@ -26,7 +14,7 @@ TARGET?=sm_75
 
 all: a4
 
-a4: main.cu dense_graph.h sparse_graph.h data_types.h data_generator.h cuda_common.h
+a4: main.cu utils.h cuda_common.h GEMM.h
 	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o a4 main.cu -arch=$(TARGET) $(CXXFLAGS)
 
 clean:
