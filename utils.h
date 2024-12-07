@@ -38,6 +38,28 @@ std::vector<uint32_t> generate_matrix( uint32_t upper_bound, std::size_t size )
     return matrix;
  }
 
+ template< typename T >
+std::vector<T> generate_matrix( T upper_bound, std::size_t n, std::size_t padded_n )
+ {
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> distribution(0, upper_bound);
+
+    std::vector<T> matrix;
+    for ( std::size_t idx = 0; idx < padded_n * padded_n; ++idx ){
+        std::size_t row = idx / padded_n;
+        std::size_t col = idx % padded_n;
+        T val = 0;
+        std::size_t count = 0;
+        if ((count++) < n*n && row < n && col < n){
+            val = distribution(rng);
+        }
+        matrix.push_back( val );
+    }
+
+    return matrix;
+ }
+
 /** 
  * allocate_device_space
  * @brief Allocate size amount of space for each pointer on GPU
