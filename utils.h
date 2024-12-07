@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cassert>
 #include <random>
+#include <mma.h>
 
 #ifndef NO_OPENBLAS
 #include <cblas.h>
@@ -24,8 +25,8 @@ constexpr std::size_t get_padded_sz( std::size_t n, std::size_t multiple)
  * get_random_number
  * @brief Fill given matrix with random numbers in interval [0, upper_bound]
  */
-template<typename T>
-std::vector<T> generate_matrix( uint32_t upper_bound, std::size_t size )
+template< typename T >
+std::vector<T> generate_matrix( T upper_bound, std::size_t size )
  {
     std::random_device dev;
     std::mt19937 rng(dev());
@@ -43,11 +44,12 @@ std::vector<T> generate_matrix( uint32_t upper_bound, std::size_t size )
  * allocate_device_space
  * @brief Allocate size amount of space for each pointer on GPU
  */
-template<typename T>
-void allocate_device_space( T** d_matrix_a, T** d_matrix_b, T** d_matrix_c, std::size_t size){
+template< typename T, typename F >
+void allocate_device_space( T** d_matrix_a, T** d_matrix_b, F** d_matrix_c, std::size_t size){
     cudaMalloc( d_matrix_a, sizeof(T) * size );
     cudaMalloc( d_matrix_b, sizeof(T) * size );
-    cudaMalloc( d_matrix_c, sizeof(T) * size );
+    cudaMalloc( d_matrix_c, sizeof(F) * size );
+
  }
 
 /** 
@@ -95,16 +97,16 @@ void print_matrix( const std::vector<T>& matrix, std::size_t n, bool enabled = f
  *        using naive O(n^3) algorithm
  * @pre matrix_a and matrix_b must be size n*n
  */
-template< typename T >
-std::vector<T> naive_cpu_matmul(const std::vector<T>& matrix_a, const std::vector<T>& matrix_b, std::size_t n)
+template< typename T, typename F >
+std::vector<F> naive_cpu_matmul(const std::vector<T>& matrix_a, const std::vector<T>& matrix_b, std::size_t n)
 {
     // Create a zero-initialized result matrix of size nxn.
-    std::vector<T> result( n*n, T(0) );
+    std::vector<F> result( n*n, T(0) );
 
     for (std::size_t idx = 0; idx < n; idx++)
         for (std::size_t jdx = 0; jdx < n; jdx++)
             for (std::size_t kdx = 0; kdx < n; kdx++)
-               result[idx*n + jdx] += matrix_a[idx*n + kdx] * matrix_b[kdx*n + jdx];
+               result[idx*n + jdx] += (F)(matrix_a[idx*n + kdx] * matrix_b[kdx*n + jdx]);
     
     return result;
 }
