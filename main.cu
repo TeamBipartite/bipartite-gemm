@@ -23,9 +23,8 @@ int main(int argc, char **argv)
 
     if (argc > 1 && !strncmp(argv[1], "-p", 3)) print_result = true;
 
-    constexpr int n =  utils::get_padded_sz(16, 16);
+    constexpr int n =  utils::get_padded_sz(64, 16);
     constexpr int max_element = 10;
-
 
     
     /*
@@ -161,7 +160,7 @@ int main(int argc, char **argv)
     gridDim.y = (n + 16 * blockDim.y - 1) / (16 * blockDim.y);
 
     auto const tensor_core_gemm_start = std::chrono::high_resolution_clock::now();
-    tensorcores::half_gemm<<< 1, dim3{128, 4, 1} >>>(d_matrix_a_fp16, d_matrix_b_fp16, d_matrix_c_fp32, n);
+    tensorcores::gemm<half, half><<< 1, dim3{128, 4, 1} >>>(d_matrix_a_fp16, d_matrix_b_fp16, d_matrix_c_fp32, n);
     cudaDeviceSynchronize();
     auto const tensor_core_gemm_end = std::chrono::high_resolution_clock::now();
 
