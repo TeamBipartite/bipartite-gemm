@@ -24,13 +24,14 @@ constexpr std::size_t get_padded_sz( std::size_t n )
  * get_random_number
  * @brief Fill given matrix with random numbers in interval [0, upper_bound]
  */
-std::vector<uint32_t> generate_matrix( uint32_t upper_bound, std::size_t size )
+template<typename T>
+std::vector<T> generate_matrix( uint32_t upper_bound, std::size_t size )
  {
     std::random_device dev;
     std::mt19937 rng(dev());
     std::uniform_int_distribution<std::mt19937::result_type> distribution(0, upper_bound);
 
-    std::vector<uint32_t> matrix;
+    std::vector<T> matrix;
     for ( std::size_t idx = 0; idx < size; ++idx ){
         matrix.push_back( distribution(rng) );
     }
@@ -42,10 +43,11 @@ std::vector<uint32_t> generate_matrix( uint32_t upper_bound, std::size_t size )
  * allocate_device_space
  * @brief Allocate size amount of space for each pointer on GPU
  */
-void allocate_device_space( uint32_t** d_matrix_a, uint32_t** d_matrix_b, uint32_t** d_matrix_c, std::size_t size){
-    cudaMalloc( d_matrix_a, sizeof(uint32_t) * size );
-    cudaMalloc( d_matrix_b, sizeof(uint32_t) * size );
-    cudaMalloc( d_matrix_c, sizeof(uint32_t) * size );
+template<typename T>
+void allocate_device_space( T** d_matrix_a, T** d_matrix_b, T** d_matrix_c, std::size_t size){
+    cudaMalloc( d_matrix_a, sizeof(T) * size );
+    cudaMalloc( d_matrix_b, sizeof(T) * size );
+    cudaMalloc( d_matrix_c, sizeof(T) * size );
  }
 
 /** 
@@ -76,7 +78,9 @@ void print_matrix( const std::vector<T>& matrix, std::size_t n, bool enabled = f
             std::cout << idx << ": ";
             for (std::size_t jdx = 0; jdx < n; ++jdx)
             {
-                std::cout << matrix[idx*n + jdx] << " ";
+                // Up-convert to float in case there is no method to print the
+                // given type
+                std::cout << static_cast<float>(matrix[idx*n + jdx]) << " ";
             }
             std::cout << std::endl;
         }
@@ -113,7 +117,8 @@ std::vector<T> naive_cpu_matmul(const std::vector<T>& matrix_a, const std::vecto
  *        using cblas implementation
  * @pre matrix_a and matrix_b must be size n*n
  */
-std::vector<float> cblas_cpu_matmul(const std::vector<uint32_t>& matrix_a, const std::vector<uint32_t>& matrix_b, std::size_t n)
+template<typename I, typename O>
+std::vector<O> cblas_cpu_matmul(const std::vector<I>& matrix_a, const std::vector<I>& matrix_b, std::size_t n)
 {   
     // Generate vectors of floats to be compatible with cblas
     const std::vector<float> matrix_a_float( matrix_a.begin(), matrix_a.end() );
@@ -123,8 +128,8 @@ std::vector<float> cblas_cpu_matmul(const std::vector<uint32_t>& matrix_a, const
     std::vector<float> result( n*n, 0 );
     cblas_sgemm( CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n, n, 1.0,
                  matrix_a_float.data(), n, matrix_b_float.data(), n, 1.0, result.data(), n );
-    
-    return result;
+    std::vector<O> result_converted( result.begin(), result.end() ); 
+    return result_converted;
 }
 
 #endif // NO_OPENBLAS
@@ -132,6 +137,3 @@ std::vector<float> cblas_cpu_matmul(const std::vector<uint32_t>& matrix_a, const
 } // namespace utils
 } // namespace a4
 } // namepace csc485b
-
-
-

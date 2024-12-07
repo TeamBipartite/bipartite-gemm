@@ -1,7 +1,56 @@
 #include <cstddef>
+#include <mma.h>
+
+using namespace nvcuda;
 
 namespace csc485b {
 namespace a4 {
+
+namespace tensorcores{
+
+/** half_gemm
+  * @brief perform a gemm on two fp16 matricies using tensor wmma instructions
+  * @pre maxtrix_a, matrix_b, and result are n x n matricies
+  */
+__global__
+void half_gemm(half *matrix_a, half *matrix_b, half *res, std::size_t n)
+{
+    // TODO: parameterize or templetize this
+    const int WMMA_M = 16;
+    const int WMMA_K = 16;
+    const int WMMA_N = 16;
+
+    // Note that threadblocks are a 4x4 2D grid of warps
+    // Z-dimension only at block-level
+    const std::size_t a_col = ((blockIdx.z * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
+
+    const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
+    const std::size_t b_row = (blockIdx.z * blockDim.y + threadIdx.y) * WMMA_N;
+
+    const std::size_t c_col = ((blockIdx.z * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
+    
+    if (a_col >= n || a_row >= n) return;
+
+    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_K, WMMA_N, half, wmma::row_major> afrag;
+    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_K, WMMA_N, half, wmma::row_major> bfrag;
+    wmma::fragment<wmma::accumulator, WMMA_M, WMMA_K, WMMA_N, half>  acc;
+
+    wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
+    wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
+    wmma::load_matrix_sync(acc, res + c_row * n + c_col, n, wmma::mem_row_major);
+
+    wmma::mma_sync(acc, afrag, bfrag, acc);
+    
+    wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
+
+}
+
+
+} // namespace tensorcores
+
+
 namespace cudacores{
 
 /**
