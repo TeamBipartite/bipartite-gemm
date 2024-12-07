@@ -23,8 +23,7 @@ int main(int argc, char **argv)
 
     if (argc > 1 && !strncmp(argv[1], "-p", 3)) print_result = true;
 
-    //constexpr int n =  utils::get_padded_sz(16);
-    constexpr int n =  16;
+    constexpr int n =  utils::get_padded_sz(64, 16);
     constexpr int max_element = 10;
     
     /*
@@ -100,7 +99,7 @@ int main(int argc, char **argv)
     */
     std::cout << "------Tensor Core GEMM Implementation------" << std::endl;
     auto const tensor_core_gemm_start = std::chrono::high_resolution_clock::now();
-    tensorcores::half_gemm<<< 1, 32 >>>(d_matrix_a, d_matrix_b, d_matrix_c, n);
+    tensorcores::half_gemm<<< 1, dim3{128, 4, 1} >>>(d_matrix_a, d_matrix_b, d_matrix_c, n);
     cudaMemcpy( matrix_c.data(), d_matrix_c, sizeof(half) * matrix_c.size(), cudaMemcpyDeviceToHost );
     auto const tensor_core_gemm_end = std::chrono::high_resolution_clock::now();
 

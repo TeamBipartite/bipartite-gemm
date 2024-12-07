@@ -13,11 +13,11 @@ namespace utils {
 
 /** 
  * get_padded_sz
- * @brief Pads the given n to the least multiple of 32 not less than n
+ * @brief Pads the given n to the least multiple of multiple not less than n
  */
-constexpr std::size_t get_padded_sz( std::size_t n )
+constexpr std::size_t get_padded_sz( std::size_t n, std::size_t multiple)
 {
-    return n%32 ? n + (32 - n%32) : n;
+    return n%multiple ? n + (multiple - n%multiple) : n;
 }
 
 /** 

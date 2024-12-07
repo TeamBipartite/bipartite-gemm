@@ -22,26 +22,32 @@ void half_gemm(half *matrix_a, half *matrix_b, half *res, std::size_t n)
 
     // Note that threadblocks are a 4x4 2D grid of warps
     // Z-dimension only at block-level
-    const std::size_t a_col = ((blockIdx.z * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    std::size_t a_col = 0; //((blockIdx.z * blockDim.x + threadIdx.x) / 32) * WMMA_M;
     const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
 
     const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
-    const std::size_t b_row = (blockIdx.z * blockDim.y + threadIdx.y) * WMMA_N;
+    std::size_t b_row = 0; //(blockIdx.z * blockDim.y + threadIdx.y) * WMMA_N;
 
     const std::size_t c_col = ((blockIdx.z * blockDim.x + threadIdx.x) / 32) * WMMA_M;
     const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
     
-    if (a_col >= n || a_row >= n) return;
+    if (a_row >= n || b_col >= n) return;
 
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_K, WMMA_N, half, wmma::row_major> afrag;
     wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_K, WMMA_N, half, wmma::row_major> bfrag;
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_K, WMMA_N, half>  acc;
 
-    wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
-    wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
     wmma::load_matrix_sync(acc, res + c_row * n + c_col, n, wmma::mem_row_major);
 
-    wmma::mma_sync(acc, afrag, bfrag, acc);
+    for (std::size_t z = 0; z < n/WMMA_N; z++)
+    {
+        wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
+        wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
+        wmma::mma_sync(acc, afrag, bfrag, acc);
+        a_col += WMMA_M;
+        b_row += WMMA_N;
+    }
+
     
     wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
 
