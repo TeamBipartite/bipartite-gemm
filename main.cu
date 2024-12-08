@@ -80,5 +80,21 @@ int main(int argc, char **argv)
             }, "Tensor Core GEMM FP16 Implementation" );
 
 
+    /*
+    **********************************
+    * Tensor Core INT8 GEMM Experiment
+    **********************************
+    */
+
+    GemmExperiment<unsigned char, int> tensorCoreExpInt8{original_n, max_element, multiple, seed, print_result};
+    tensorCoreExpInt8.run_experiment(
+        [&tensorCoreExpInt8] (unsigned char *a, unsigned char *b, int *c) {
+            const dim3 blockDim { 128, 4, 1 };
+            dim3 gridDim;
+            gridDim.x = (tensorCoreExpInt8.get_n() + (16 * blockDim.x / 32 - 1)) / (16 * blockDim.x / 32);
+            gridDim.y = (tensorCoreExpInt8.get_n() + 16 * blockDim.y - 1) / (16 * blockDim.y);
+            tensorcores::gemm<unsigned char, int><<< gridDim, blockDim >>>(a, b, c, tensorCoreExpInt8.get_n());
+            }, "Tensor Core GEMM INT8 Implementation" );
+
     return EXIT_SUCCESS;
 }
