@@ -23,12 +23,15 @@ public:
 
     const std::vector<I> matrix_a;
     I* d_matrix_a;
+    I* h_matrix_a;
 
     const std::vector<I> matrix_b;
     I* d_matrix_b;
+    I* h_matrix_b;
 
     std::vector<R> matrix_c;
     R* d_matrix_c;
+    R* h_matrix_c;
 
     bool print_result;
 
@@ -42,6 +45,9 @@ public:
                                                         d_matrix_a{nullptr},
                                                         d_matrix_b{nullptr},
                                                         d_matrix_c{nullptr},
+                                                        h_matrix_a{nullptr},
+                                                        h_matrix_b{nullptr},
+                                                        h_matrix_c{nullptr},
                                                         fixed_seed{seed},
                                                         print_result{print_result} {}
     
@@ -57,10 +63,27 @@ public:
         cudaMalloc( &d_matrix_a, sizeof( I ) * n * n );
         cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
         cudaMalloc( &d_matrix_c, sizeof( R ) * n * n );
-
+ 
         // Copy contents of matrix_a and matrix_b to device
-        cudaMemcpy( d_matrix_a, matrix_a.data(), sizeof( I ) * matrix_a.size(), cudaMemcpyHostToDevice );
-        cudaMemcpy( d_matrix_b, matrix_b.data(), sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
+        cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
+        cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
+        memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
+        memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
+          // events for timing
+          cudaEvent_t startEvent, stopEvent;
+
+           cudaEventCreate(&startEvent) ;
+           cudaEventCreate(&stopEvent) ;
+
+          cudaEventRecord(startEvent, 0) ;
+        cudaMemcpy( d_matrix_a, h_matrix_a, sizeof( I ) * matrix_a.size(), cudaMemcpyHostToDevice );
+        cudaMemcpy( d_matrix_b, h_matrix_b, sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
+           cudaEventRecord(stopEvent, 0) ;
+           cudaEventSynchronize(stopEvent);
+
+          float time;
+           cudaEventElapsedTime(&time, startEvent, stopEvent);
+           std::cout << "TRANSFER TIME: " << time << "\n";
 
         // Set contents of matrix_c to zero on device
         cudaMemset(d_matrix_c, 0x0, sizeof(R) * matrix_c.size() );
