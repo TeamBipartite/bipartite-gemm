@@ -38,6 +38,9 @@ public:
 
     bool print_result;
 
+    const std::size_t superblock_sz;
+    std::vector<cudaStream_t> streams;
+
 
     // Member Functions
     GemmExperiment( std::size_t input_n, std::size_t upper_bound, std::size_t multiple, uint32_t seed, bool print_result ):
@@ -51,8 +54,31 @@ public:
                                                         h_matrix_a{nullptr},
                                                         h_matrix_b{nullptr},
                                                         h_matrix_c{nullptr},
+                                                        superblock_sz{n},
+                                                        streams{nullptr},
                                                         fixed_seed{seed},
                                                         print_result{print_result} {}
+
+    GemmExperiment( std::size_t input_n, std::size_t upper_bound, std::size_t multiple, uint32_t seed, bool print_result, std::size_t superblock_sz ):
+                                                        n{get_padded_sz(input_n, multiple)},
+                                                        matrix_a{generate_matrix<I>(I(upper_bound), input_n, n, seed)}, 
+                                                        matrix_b{generate_matrix<I>(I(upper_bound), input_n, n, seed)},
+                                                        matrix_c{std::vector<R>(n*n, R(0))},
+                                                        d_matrix_a{nullptr},
+                                                        d_matrix_b{nullptr},
+                                                        d_matrix_c{nullptr},
+                                                        h_matrix_a{nullptr},
+                                                        h_matrix_b{nullptr},
+                                                        h_matrix_c{nullptr},
+                                                        superblock_sz{superblock_sz},
+                                                        streams{std::vector<cudaStream_t>(2)},
+                                                        fixed_seed{seed},
+                                                        print_result{print_result} 
+     {
+
+         cudaStreamCreate(&streams[0]);
+         cudaStreamCreate(&streams[1]);
+     }
     
     ~GemmExperiment(){
         if (d_matrix_a != nullptr) cudaFree(&d_matrix_a);
@@ -67,7 +93,7 @@ public:
         cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
         cudaMalloc( &d_matrix_c, sizeof( R ) * n * n );
  
-        // Copy contents of matrix_a and matrix_b to device
+        // Copy contents of matrix_a and matrix_b to pinned memory
         cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
         cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
         memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
@@ -100,10 +126,73 @@ public:
         return n;
     }
 
+    std::size_t get_superblk_sz(){
+        return superblock_sz;
+    }
+
     void run_experiment( std::function<void(I*, I*, R*)> kernel_wrapper, std::string title){
         prepare_device();
         auto const start = std::chrono::high_resolution_clock::now();
         kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
+        cudaDeviceSynchronize();
+        auto const end = std::chrono::high_resolution_clock::now();
+        get_product_from_device();
+        get_results(title, start, end);
+    }
+
+    void run_experiment_streams( std::function<void(I*, I*, R*, std::size_t, cudaStream_t)> kernel_wrapper, std::string title)
+    {
+        //prepare_device();
+        cudaMalloc( &d_matrix_a, sizeof( I ) * 2 * superblock_sz * n );
+        cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
+        cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * superblock_sz );
+ 
+        // Copy contents of matrix_a and matrix_b to pinned memory
+        cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
+        cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
+        memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
+        memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
+        cudaMemcpy( d_matrix_b, h_matrix_b, sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
+
+        auto const start = std::chrono::high_resolution_clock::now();
+        assert( n * n == matrix_a.size() && "GemmExperiment need to be of size n x n" );
+        // PRECONDITION: superblock_sz is a factor of n
+        assert(n % superblock_sz ==0 && "superblock_sz must be a factor of n");
+        for (std::size_t i = 0; i < n/superblock_sz; i+=2)
+        {
+          assert(      cudaMemcpyAsync( d_matrix_a, h_matrix_a, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] ));
+          assert( cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] ));
+          for (std::size_t j = 0; j < n/superblock_sz; j++)
+          {
+//          cudaEvent_t startEvent, stopEvent;
+
+//           cudaEventCreate(&startEvent) ;
+//           cudaEventCreate(&stopEvent) ;
+
+//          cudaEventRecord(startEvent, 0) ;
+
+            //if (!i)
+            //{
+
+            kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, j, streams[0]);
+            kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*superblock_sz, j, streams[1]);
+            assert(cudaMemcpyAsync( h_matrix_c + superblock_sz*i*n + superblock_sz*j, d_matrix_c, sizeof( I ) * superblock_sz*superblock_sz, cudaMemcpyDeviceToHost, streams[0] ));
+            assert(cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + superblock_sz*j, d_matrix_c+superblock_sz*superblock_sz, sizeof( I ) * superblock_sz*superblock_sz, cudaMemcpyDeviceToHost, streams[1] ));
+                //cudaMemcpyAsync( d_matrix_b, h_matrix_b, sizeof( I ) * n, cudaMemcpyHostToDevice, streams[0] );
+            //}
+//           cudaEventRecord(stopEvent, 0) ;
+//           cudaEventSynchronize(stopEvent);
+
+//          float time;
+//           cudaEventElapsedTime(&time, startEvent, stopEvent);
+//           std::cout << "TRANSFER TIME: " << time << "\n";
+    
+        // Set contents of matrix_c to zero on device
+        //cudaMemset(d_matrix_c, 0x0, sizeof(R) * matrix_c.size() );
+        //kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
+
+          }
+        }
         cudaDeviceSynchronize();
         auto const end = std::chrono::high_resolution_clock::now();
         get_product_from_device();

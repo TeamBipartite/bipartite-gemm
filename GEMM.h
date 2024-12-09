@@ -8,14 +8,15 @@ namespace a4 {
 
 namespace tensorcores{
 
+template<typename I, typename R>
 __global__
-void transpose_matrix(half* matrix, half* matrix_transpose, std::size_t n) {
+void transpose_matrix(I *matrix, R *matrix_transpose, std::size_t width, std::size_t n) {
   const std::size_t th_idx = blockDim.x * blockIdx.x + threadIdx.x;
-  const std::size_t row = th_idx / n;
-  const std::size_t col = th_idx % n;
+  const std::size_t row = th_idx / width;
+  const std::size_t col = th_idx % width;
 
   if (th_idx < n){
-    matrix_transpose[(col * n) + row] = matrix[(row * n) + col];
+    matrix_transpose[(col * width) + row] = (R)matrix[(row * width) + col];
   }
 
   return;
@@ -28,7 +29,7 @@ void transpose_matrix(half* matrix, half* matrix_transpose, std::size_t n) {
   */
 template<typename I, typename R>
 __global__
-void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
+void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superblock_sz=0, std::size_t j=0)
 {
     // TODO: parameterize or templetize this
     const int WMMA_M = 16;
@@ -39,11 +40,11 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
     std::size_t a_col = 0; 
     const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
 
-    const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
+    const std::size_t b_col = ((superblock_sz *j + blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
     std::size_t b_row = 0;
 
-    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
-    const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
+    const std::size_t c_col = (superblock_sz) ? 0 : ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_row = (superblock_sz) ? 0 : (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
     
     if (a_row >= n || b_col >= n) return;
 
@@ -60,6 +61,8 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
         b_row = k;
         wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
         wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
+        // Much slower for some reason???
+        //wmma::load_matrix_sync(bfrag, matrix_b + b_col * n + b_row, n);
         wmma::mma_sync(acc, afrag, bfrag, acc);
         // TODO: might need this when we consider non-square tiles
         //a_col += WMMA_M;
