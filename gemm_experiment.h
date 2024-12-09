@@ -10,6 +10,9 @@
 #include <cblas.h>
 #endif
 
+#define US_PER_S 1000000
+#define GIGA     1000000000
+
 namespace csc485b {
 namespace a4 {
 
@@ -83,7 +86,7 @@ public:
 
           float time;
            cudaEventElapsedTime(&time, startEvent, stopEvent);
-           std::cout << "TRANSFER TIME: " << time << "\n";
+//           std::cout << "TRANSFER TIME: " << time << "\n";
 
         // Set contents of matrix_c to zero on device
         cudaMemset(d_matrix_c, 0x0, sizeof(R) * matrix_c.size() );
@@ -110,27 +113,36 @@ public:
     void get_results( std::string title, std::chrono::time_point<std::chrono::high_resolution_clock> start, 
                       std::chrono::time_point<std::chrono::high_resolution_clock> end ) {
         std::cout << std::format("--------{}--------", title) << std::endl;
-        #ifdef NO_OPENBLAS
-            std::vector<R> matrix_c_expected = naive_cpu_matmul();
-            if (print_result) std::cout << "Expected Result:" << std::endl;
-            print_matrix<R>( matrix_c_expected, n, print_result );
-            if (print_result) std::cout << "Actual Result:" << std::endl;
-            print_matrix<R>( matrix_c, n, print_result );
-            std::cout << "Correct Output:" << matrix_c == matrix_c_expected << std::endl;
-        #else
-            const std::vector<R> matrix_c_expected = cblas_cpu_matmul();
-            if (print_result) std::cout << "Expected Result:" << std::endl;
-            print_matrix<R>( matrix_c_expected, n, print_result );
-            if (print_result) std::cout << "Actual Result:" << std::endl;
-            print_matrix<R>( matrix_c, n, print_result );
-            bool equal = matrix_c == matrix_c_expected;
-            std::cout << "Correct Output:" << equal << std::endl;
-        #endif
 
-        std::cout << std::format("Time: {} us", 
-        std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) 
-                  << std::endl;
+#ifdef NO_OPENBLAS
+        std::vector<R> matrix_c_expected = naive_cpu_matmul();
+#else
+        const std::vector<R> matrix_c_expected = cblas_cpu_matmul();
+#endif
+
+        if (print_result) std::cout << "Expected Result:" << std::endl;
+        print_matrix<R>( matrix_c_expected, n, print_result );
+        if (print_result) std::cout << "Actual Result:" << std::endl;
+        print_matrix<R>( matrix_c, n, print_result );
+
+        bool equal = matrix_c == matrix_c_expected;
+        std::cout << "Correct Output:" << equal << std::endl;
+
+
+        std::size_t time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        double gflops = get_gflops(time, 28);
+
+
+        std::cout << std::format("Time: {} us", time) << std::endl
+                  << std::format("Estimated GFLOPs: {}", gflops) << std::endl;
     }
+
+    double get_gflops(std::size_t us, std::size_t num_sms)
+    {
+        double s = us*1.0 / US_PER_S;
+        return 2 * (n*n*n) / s / GIGA / num_sms;
+    }
+
 
     // Static Functions
     template< typename T >
