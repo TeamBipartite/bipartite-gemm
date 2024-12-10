@@ -26,12 +26,12 @@ int main(int argc, char **argv)
     constexpr int original_n = 8192;
     //constexpr int original_n = 32;
     constexpr int multiple = 32;
-    constexpr int max_element = 10;
+    constexpr int max_element = 20;
 
     // Create a random device
     std::random_device rd;
     // Generate a random seed to ensure all experiments use the same random values
-    unsigned int seed = rd();
+    unsigned int seed = 1234; ///rd();
 
     /*
     ****************************
@@ -54,7 +54,6 @@ int main(int argc, char **argv)
     **********************************
     */
     
-#if 0
     GemmExperiment<half, float> tensorCoreExpFp32{original_n, max_element, multiple, seed, print_result};
     tensorCoreExpFp32.run_experiment( 
         [&tensorCoreExpFp32] (half* a, half* b, float* c) {
@@ -65,7 +64,6 @@ int main(int argc, char **argv)
             tensorcores::gemm<half, float><<< gridDim, blockDim >>>(a, b, c, tensorCoreExpFp32.get_n()); 
             }, "Tensor Core GEMM FP32 Implementation" );
     
-#endif
     /*
     **********************************
     * Tensor Core FP16 GEMM Experiment
@@ -92,14 +90,14 @@ int main(int argc, char **argv)
     **********************************
     */
 
-    GemmExperiment<half, half> tensorCoreExpFp16Streams{original_n, max_element, multiple, seed, print_result};
+    GemmExperiment<half, half> tensorCoreExpFp16Streams{original_n, max_element, multiple, seed, print_result, 256};
     new_n = tensorCoreExpFp16Streams.get_n();
     tensorCoreExpFp16Streams.run_experiment_streams( 
         [&tensorCoreExpFp16Streams, new_n] (half *a, half *b, half *c, std::size_t j, cudaStream_t stream) {
             const dim3 blockDim { 128, 4, 1 };
             dim3 gridDim;
-            gridDim.x = (new_n + (16 * blockDim.x / 32 - 1)) / (16 * blockDim.x / 32);
-            gridDim.y = (new_n + 16 * blockDim.y - 1) / (16 * blockDim.y);
+            gridDim.x = (256 + (16 * blockDim.x / 32 - 1)) / (16 * blockDim.x / 32);
+            gridDim.y = (256 + 16 * blockDim.y - 1) / (16 * blockDim.y);
             //tensorcores::transpose_matrix<half, half><<< new_n*new_n/1024, 1024 >>>(c, b, new_n, new_n*new_n);
             //cudaMemset(c, 0, sizeof(half) * new_n*new_n );
             tensorcores::gemm<half, half><<< gridDim, blockDim, 0, stream >>>(a, b, c, new_n, tensorCoreExpFp16Streams.get_superblk_sz(), j); 
@@ -110,7 +108,7 @@ int main(int argc, char **argv)
     * Tensor Core INT8 GEMM Experiment
     **********************************
     */
-
+#if 0
     GemmExperiment<unsigned char, int> tensorCoreExpInt8{original_n, max_element, multiple, seed, print_result};
     tensorCoreExpInt8.run_experiment(
         [&tensorCoreExpInt8] (unsigned char *a, unsigned char *b, int *c) {
@@ -120,5 +118,6 @@ int main(int argc, char **argv)
             gridDim.y = (tensorCoreExpInt8.get_n() + 16 * blockDim.y - 1) / (16 * blockDim.y);
             tensorcores::gemm<unsigned char, int><<< gridDim, blockDim >>>(a, b, c, tensorCoreExpInt8.get_n());
             }, "Tensor Core GEMM INT8 Implementation" );
+#endif
     return EXIT_SUCCESS;
 }

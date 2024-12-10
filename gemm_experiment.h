@@ -96,6 +96,7 @@ public:
         // Copy contents of matrix_a and matrix_b to pinned memory
         cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
         cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
+        cudaMallocHost((void**) &h_matrix_b, sizeof( R ) * matrix_c.size());
         memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
         memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
           // events for timing
@@ -131,8 +132,8 @@ public:
     }
 
     void run_experiment( std::function<void(I*, I*, R*)> kernel_wrapper, std::string title){
-        prepare_device();
         auto const start = std::chrono::high_resolution_clock::now();
+        prepare_device();
         kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
         cudaDeviceSynchronize();
         auto const end = std::chrono::high_resolution_clock::now();
@@ -143,6 +144,7 @@ public:
     void run_experiment_streams( std::function<void(I*, I*, R*, std::size_t, cudaStream_t)> kernel_wrapper, std::string title)
     {
         //prepare_device();
+        auto const start = std::chrono::high_resolution_clock::now();
         cudaMalloc( &d_matrix_a, sizeof( I ) * 2 * superblock_sz * n );
         cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
         cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * superblock_sz );
@@ -150,20 +152,32 @@ public:
         // Copy contents of matrix_a and matrix_b to pinned memory
         cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
         cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
+        cudaMallocHost((void**) &h_matrix_c, sizeof( R ) * matrix_b.size());
         memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
         memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
-        cudaMemcpy( d_matrix_b, h_matrix_b, sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
+        cudaMemcpy( d_matrix_b, h_matrix_b,  sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
 
-        auto const start = std::chrono::high_resolution_clock::now();
         assert( n * n == matrix_a.size() && "GemmExperiment need to be of size n x n" );
         // PRECONDITION: superblock_sz is a factor of n
         assert(n % superblock_sz ==0 && "superblock_sz must be a factor of n");
         for (std::size_t i = 0; i < n/superblock_sz; i+=2)
         {
-          assert(      cudaMemcpyAsync( d_matrix_a, h_matrix_a, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] ));
-          assert( cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] ));
+          cudaMemcpyAsync( d_matrix_a, h_matrix_a+superblock_sz*i*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] );
+          cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a+superblock_sz*(i+1)*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] );
           for (std::size_t j = 0; j < n/superblock_sz; j++)
           {
+            kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, j, streams[0]);
+            kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*superblock_sz, j, streams[1]);
+            cudaMemcpyAsync( h_matrix_c + superblock_sz*(i)*n + superblock_sz*j, d_matrix_c+(superblock_sz)*superblock_sz, sizeof( R ) * superblock_sz * superblock_sz, cudaMemcpyDeviceToHost, streams[0] );
+            cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + superblock_sz*j, d_matrix_c+(superblock_sz)*superblock_sz, sizeof( R ) * superblock_sz * superblock_sz, cudaMemcpyDeviceToHost, streams[1] );
+            //for (std::size_t k = 0; k < superblock_sz; k++)
+            //{
+            //    cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n + k*n + superblock_sz*j, d_matrix_c + k*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[0] );
+            //    cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + k*n + superblock_sz*j, d_matrix_c+(superblock_sz+k)*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[1] );
+            //}
+            //cudaMemset(d_matrix_c, 0x0, sizeof(R) * superblock_sz * superblock_sz * 2 );
+            //cudaStreamSynchronize(streams[0]);
+            //cudaStreamSynchronize(streams[1]);
 //          cudaEvent_t startEvent, stopEvent;
 
 //           cudaEventCreate(&startEvent) ;
@@ -174,10 +188,6 @@ public:
             //if (!i)
             //{
 
-            kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, j, streams[0]);
-            kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*superblock_sz, j, streams[1]);
-            assert(cudaMemcpyAsync( h_matrix_c + superblock_sz*i*n + superblock_sz*j, d_matrix_c, sizeof( I ) * superblock_sz*superblock_sz, cudaMemcpyDeviceToHost, streams[0] ));
-            assert(cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + superblock_sz*j, d_matrix_c+superblock_sz*superblock_sz, sizeof( I ) * superblock_sz*superblock_sz, cudaMemcpyDeviceToHost, streams[1] ));
                 //cudaMemcpyAsync( d_matrix_b, h_matrix_b, sizeof( I ) * n, cudaMemcpyHostToDevice, streams[0] );
             //}
 //           cudaEventRecord(stopEvent, 0) ;
@@ -195,7 +205,8 @@ public:
         }
         cudaDeviceSynchronize();
         auto const end = std::chrono::high_resolution_clock::now();
-        get_product_from_device();
+        //get_product_from_device();
+        memcpy(matrix_c.data(), h_matrix_c,  sizeof( I ) * matrix_c.size());
         get_results(title, start, end);
     }
 

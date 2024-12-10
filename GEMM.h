@@ -40,20 +40,21 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
     std::size_t a_col = 0; 
     const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
 
-    const std::size_t b_col = ((superblock_sz *j + blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
+    // RH side determines warp num, LH side situates warp with offset of b
+    const std::size_t b_col = superblock_sz *j + ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
     std::size_t b_row = 0;
 
-    const std::size_t c_col = (superblock_sz) ? 0 : ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
-    const std::size_t c_row = (superblock_sz) ? 0 : (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
-    
-    if (a_row >= n || b_col >= n) return;
+    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
+
+    const std::size_t num_cols = (superblock_sz) ? superblock_sz : n; 
+
+    if (a_row >= num_cols || b_col >= n) return;
 
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> afrag;
     wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> bfrag;
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_K, WMMA_N, R> acc;
     wmma::fill_fragment(acc, R(0));
-
-    wmma::load_matrix_sync(acc, res + c_row * n + c_col, n, wmma::mem_row_major);
 
     for (std::size_t k = 0; k < n; k += WMMA_K)
     {
@@ -69,9 +70,8 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
         //b_row += WMMA_N;
     }
 
-    wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
+    wmma::store_matrix_sync(res + c_row * num_cols + c_col, acc, num_cols, wmma::mem_row_major);
 }
-
 
 } // namespace tensorcores
 
