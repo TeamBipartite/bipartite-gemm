@@ -136,8 +136,8 @@ public:
         prepare_device();
         kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
         cudaDeviceSynchronize();
-        auto const end = std::chrono::high_resolution_clock::now();
         get_product_from_device();
+        auto const end = std::chrono::high_resolution_clock::now();
         get_results(title, start, end);
     }
 
@@ -147,7 +147,8 @@ public:
         auto const start = std::chrono::high_resolution_clock::now();
         cudaMalloc( &d_matrix_a, sizeof( I ) * 2 * superblock_sz * n );
         cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
-        cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * superblock_sz );
+        //cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * superblock_sz );
+        cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * n);
  
         // Copy contents of matrix_a and matrix_b to pinned memory
         cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
@@ -164,49 +165,23 @@ public:
         {
           cudaMemcpyAsync( d_matrix_a, h_matrix_a+superblock_sz*i*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] );
           cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a+superblock_sz*(i+1)*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] );
-          for (std::size_t j = 0; j < n/superblock_sz; j++)
+          for (std::size_t j = 0; j < superblock_sz/superblock_sz; j++)
           {
             kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, j, streams[0]);
-            kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*superblock_sz, j, streams[1]);
-            cudaMemcpyAsync( h_matrix_c + superblock_sz*(i)*n + superblock_sz*j, d_matrix_c+(superblock_sz)*superblock_sz, sizeof( R ) * superblock_sz * superblock_sz, cudaMemcpyDeviceToHost, streams[0] );
-            cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + superblock_sz*j, d_matrix_c+(superblock_sz)*superblock_sz, sizeof( R ) * superblock_sz * superblock_sz, cudaMemcpyDeviceToHost, streams[1] );
-            //for (std::size_t k = 0; k < superblock_sz; k++)
-            //{
-            //    cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n + k*n + superblock_sz*j, d_matrix_c + k*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[0] );
-            //    cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + k*n + superblock_sz*j, d_matrix_c+(superblock_sz+k)*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[1] );
-            //}
-            //cudaMemset(d_matrix_c, 0x0, sizeof(R) * superblock_sz * superblock_sz * 2 );
-            //cudaStreamSynchronize(streams[0]);
-            //cudaStreamSynchronize(streams[1]);
-//          cudaEvent_t startEvent, stopEvent;
-
-//           cudaEventCreate(&startEvent) ;
-//           cudaEventCreate(&stopEvent) ;
-
-//          cudaEventRecord(startEvent, 0) ;
-
-            //if (!i)
-            //{
-
-                //cudaMemcpyAsync( d_matrix_b, h_matrix_b, sizeof( I ) * n, cudaMemcpyHostToDevice, streams[0] );
-            //}
-//           cudaEventRecord(stopEvent, 0) ;
-//           cudaEventSynchronize(stopEvent);
-
-//          float time;
-//           cudaEventElapsedTime(&time, startEvent, stopEvent);
-//           std::cout << "TRANSFER TIME: " << time << "\n";
-    
-        // Set contents of matrix_c to zero on device
-        //cudaMemset(d_matrix_c, 0x0, sizeof(R) * matrix_c.size() );
-        //kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
-
+            kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*n, j, streams[1]);
+            for (std::size_t k = 0; k < superblock_sz; k++)
+            {
+                //cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n + k*n + superblock_sz*j, d_matrix_c + k*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[0] );
+                //cudaMemcpyAsync( h_matrix_c + superblock_sz*(i+1)*n + k*n + superblock_sz*j, d_matrix_c+(superblock_sz+k)*superblock_sz, sizeof( R ) * superblock_sz, cudaMemcpyDeviceToHost, streams[1] );
+            }
           }
+          cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n, d_matrix_c, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[0] );
+          cudaMemcpyAsync(  h_matrix_c + superblock_sz*(i+1)*n, d_matrix_c + superblock_sz*n, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[1] );
         }
+
         cudaDeviceSynchronize();
-        auto const end = std::chrono::high_resolution_clock::now();
-        //get_product_from_device();
         memcpy(matrix_c.data(), h_matrix_c,  sizeof( I ) * matrix_c.size());
+        auto const end = std::chrono::high_resolution_clock::now();
         get_results(title, start, end);
     }
 

@@ -90,14 +90,14 @@ int main(int argc, char **argv)
     **********************************
     */
 
-    GemmExperiment<half, half> tensorCoreExpFp16Streams{original_n, max_element, multiple, seed, print_result, 256};
+    GemmExperiment<half, half> tensorCoreExpFp16Streams{original_n, max_element, multiple, seed, print_result, 64};
     new_n = tensorCoreExpFp16Streams.get_n();
     tensorCoreExpFp16Streams.run_experiment_streams( 
         [&tensorCoreExpFp16Streams, new_n] (half *a, half *b, half *c, std::size_t j, cudaStream_t stream) {
             const dim3 blockDim { 128, 4, 1 };
             dim3 gridDim;
-            gridDim.x = (256 + (16 * blockDim.x / 32 - 1)) / (16 * blockDim.x / 32);
-            gridDim.y = (256 + 16 * blockDim.y - 1) / (16 * blockDim.y);
+            gridDim.x = (new_n + (16 * blockDim.x / 32 - 1)) / (16 * blockDim.x / 32);
+            gridDim.y = (64 + 16 * blockDim.y - 1) / (16 * blockDim.y);
             //tensorcores::transpose_matrix<half, half><<< new_n*new_n/1024, 1024 >>>(c, b, new_n, new_n*new_n);
             //cudaMemset(c, 0, sizeof(half) * new_n*new_n );
             tensorcores::gemm<half, half><<< gridDim, blockDim, 0, stream >>>(a, b, c, new_n, tensorCoreExpFp16Streams.get_superblk_sz(), j); 

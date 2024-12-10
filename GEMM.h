@@ -44,7 +44,7 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
     const std::size_t b_col = superblock_sz *j + ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
     std::size_t b_row = 0;
 
-    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_col = superblock_sz*j + ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
     const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
 
     const std::size_t num_cols = (superblock_sz) ? superblock_sz : n; 
@@ -70,7 +70,8 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
         //b_row += WMMA_N;
     }
 
-    wmma::store_matrix_sync(res + c_row * num_cols + c_col, acc, num_cols, wmma::mem_row_major);
+    //wmma::store_matrix_sync(res + c_row * num_cols + c_col, acc, num_cols, wmma::mem_row_major);
+    wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
 }
 
 } // namespace tensorcores
