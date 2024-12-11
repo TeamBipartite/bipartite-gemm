@@ -1,6 +1,11 @@
 #include <cstddef>
 #include <mma.h>
 
+#define WARP_SZ 32
+#define WMMA_M  16
+#define WMMA_K  16
+#define WMMA_N  16
+
 using namespace nvcuda;
 
 namespace csc485b {
@@ -31,19 +36,15 @@ template<typename I, typename R>
 __global__
 void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superblock_sz=0)
 {
-    // TODO: parameterize or templetize this
-    const int WMMA_M = 16;
-    const int WMMA_K = 16;
-    const int WMMA_N = 16;
 
     // Note that threadblocks are a 4x4 2D grid of warps
     std::size_t a_col = 0; 
     const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
 
-    const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
+    const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / WARP_SZ) * WMMA_K;
     std::size_t b_row = 0;
 
-    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / WARP_SZ) * WMMA_M;
     const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
 
     // Safe as this will be consistent for an entire kernel launch
@@ -87,7 +88,7 @@ std::size_t warp_sum(std::size_t th_val)
   std::size_t new_val = 0;
   uint32_t shuffle_mask = 0xFFFFFFFF;
 
-  for (std::size_t stride = 1; stride < 32; stride <<= 1)
+  for (std::size_t stride = 1; stride < WARP_SZ; stride <<= 1)
   {
       new_val = __shfl_down_sync(0xFFFFFFFF, th_val, stride);
       // Only add the new value if this thread is in the mask!
