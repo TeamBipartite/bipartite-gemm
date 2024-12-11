@@ -5,17 +5,17 @@ using namespace nvcuda;
 
 namespace csc485b {
 namespace a4 {
-
 namespace tensorcores{
 
+template<typename I, typename R>
 __global__
-void transpose_matrix(half* matrix, half* matrix_transpose, std::size_t n) {
+void transpose_matrix(I *matrix, R *matrix_transpose, std::size_t width, std::size_t n) {
   const std::size_t th_idx = blockDim.x * blockIdx.x + threadIdx.x;
-  const std::size_t row = th_idx / n;
-  const std::size_t col = th_idx % n;
+  const std::size_t row = th_idx / width;
+  const std::size_t col = th_idx % width;
 
   if (th_idx < n){
-    matrix_transpose[(col * n) + row] = matrix[(row * n) + col];
+    matrix_transpose[(col * width) + row] = (R)matrix[(row * width) + col];
   }
 
   return;
@@ -23,12 +23,13 @@ void transpose_matrix(half* matrix, half* matrix_transpose, std::size_t n) {
 }
 
 /** gemm
-  * @brief perform a gemm on two fp16 matricies using tensor wmma instructions
-  * @pre maxtrix_a, matrix_b, and result are n x n matricies
+  * @brief perform a gemm on two matricies of type I using tensor wmma
+  *        instructions, saving the results in the type R matrix
+  * @pre matrix_a, matrix_b, and res are n x n matricies
   */
 template<typename I, typename R>
 __global__
-void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
+void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superblock_sz=0)
 {
     // TODO: parameterize or templetize this
     const int WMMA_M = 16;
@@ -44,15 +45,16 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
 
     const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
     const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
-    
-    if (a_row >= n || b_col >= n) return;
+
+    // Safe as this will be consistent for an entire kernel launch
+    const std::size_t num_rows = (superblock_sz) ? superblock_sz : n; 
+
+    if (a_row >= num_rows || b_col >= n) return;
 
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> afrag;
     wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> bfrag;
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_K, WMMA_N, R> acc;
     wmma::fill_fragment(acc, R(0));
-
-    wmma::load_matrix_sync(acc, res + c_row * n + c_col, n, wmma::mem_row_major);
 
     for (std::size_t k = 0; k < n; k += WMMA_K)
     {
@@ -68,7 +70,6 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n)
 
     wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
 }
-
 
 } // namespace tensorcores
 
