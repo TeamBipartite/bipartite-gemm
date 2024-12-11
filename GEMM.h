@@ -5,7 +5,6 @@ using namespace nvcuda;
 
 namespace csc485b {
 namespace a4 {
-
 namespace tensorcores{
 
 template<typename I, typename R>
@@ -24,12 +23,13 @@ void transpose_matrix(I *matrix, R *matrix_transpose, std::size_t width, std::si
 }
 
 /** gemm
-  * @brief perform a gemm on two fp16 matricies using tensor wmma instructions
-  * @pre maxtrix_a, matrix_b, and result are n x n matricies
+  * @brief perform a gemm on two matricies of type I using tensor wmma
+  *        instructions, saving the results in the type R matrix
+  * @pre matrix_a, matrix_b, and res are n x n matricies
   */
 template<typename I, typename R>
 __global__
-void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superblock_sz=0, std::size_t j=0)
+void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superblock_sz=0)
 {
     // TODO: parameterize or templetize this
     const int WMMA_M = 16;
@@ -40,16 +40,16 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
     std::size_t a_col = 0; 
     const std::size_t a_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_K;
 
-    // RH side determines warp num, LH side situates warp with offset of b
-    const std::size_t b_col = superblock_sz *j + ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
+    const std::size_t b_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_K;
     std::size_t b_row = 0;
 
-    const std::size_t c_col = superblock_sz*j + ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
+    const std::size_t c_col = ((blockIdx.x * blockDim.x + threadIdx.x) / 32) * WMMA_M;
     const std::size_t c_row = (blockIdx.y * blockDim.y + threadIdx.y) * WMMA_N;
 
-    const std::size_t num_cols = (superblock_sz) ? superblock_sz : n; 
+    // Safe as this will be consistent for an entire kernel launch
+    const std::size_t num_rows = (superblock_sz) ? superblock_sz : n; 
 
-    if (a_row >= num_cols || b_col >= n) return;
+    if (a_row >= num_rows || b_col >= n) return;
 
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> afrag;
     wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_K, WMMA_N, I, wmma::row_major> bfrag;
@@ -62,15 +62,12 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
         b_row = k;
         wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
         wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
-        // Much slower for some reason???
-        //wmma::load_matrix_sync(bfrag, matrix_b + b_col * n + b_row, n);
         wmma::mma_sync(acc, afrag, bfrag, acc);
         // TODO: might need this when we consider non-square tiles
         //a_col += WMMA_M;
         //b_row += WMMA_N;
     }
 
-    //wmma::store_matrix_sync(res + c_row * num_cols + c_col, acc, num_cols, wmma::mem_row_major);
     wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
 }
 
