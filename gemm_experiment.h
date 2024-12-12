@@ -13,6 +13,7 @@
 
 #define US_PER_S 1000000
 #define GIGA     1000000000
+#define FIXED_EPSILON 0.00001
 
 namespace csc485b {
 namespace a4 {
@@ -259,7 +260,7 @@ private:
             T val = 0;
             std::size_t count = 0;
             if ((count++) < n*n && row < n && col < n){
-                val =7; //(T)distribution(rng);
+                val = (T)distribution(rng);
             }
             matrix.push_back( val );
         }
@@ -279,16 +280,12 @@ private:
     bool matrices_equal( const std::vector<T>& matrix_actual, const std::vector<T>& matrix_expected )
     {
         assert( matrix_actual.size() == matrix_expected.size() && "The given matrices must have the same size");
-        std::size_t max_error_a = 0, mac_error_b = 0;
+
         for ( std::size_t idx = 0; idx < matrix_actual.size(); ++idx)
         {
-            if (fabs ( (float) (matrix_actual[idx] - matrix_expected[idx] ) ) >= 0.00001 ){
-                max_error_a = matrix_actual[idx];
-                mac_error_b = matrix_expected[idx];
-                //return false;
-            }
+            if (fabs ( (float) (matrix_actual[idx] - matrix_expected[idx] ) ) >= FIXED_EPSILON )
+                return false;
         }
-        std::cout << "ERROR: " << max_error_a << " " << mac_error_b << "\n";
         return true;
     }
 

@@ -23,9 +23,9 @@ int main(int argc, char **argv)
 
     if (argc > 1 && !strncmp(argv[1], "-p", 3)) print_result = true;
 
-    constexpr int original_n  = 1024;
+    constexpr int original_n  = 4096;
     constexpr int multiple    = WMMA_M * 4;
-    constexpr int max_element = 20;
+    constexpr int max_element = 1;
 
     // Create a random device
     std::random_device rd;
