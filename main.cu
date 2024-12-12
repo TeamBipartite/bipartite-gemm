@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     GemmExperiment<half, float> tensorCoreExpFp32{original_n, max_element, multiple, seed, print_result};
     tensorCoreExpFp32.run_experiment(
         [&tensorCoreExpFp32] (half* a, half* b, float* c) {
-            const dim3 blockDim { WMMA_M * 4, 4, 1 };
+            const dim3 blockDim { WARP_SZ * 4, 4, 1 };
             dim3 gridDim;
             gridDim.x = (tensorCoreExpFp32.get_n() + (WMMA_N * blockDim.x / WARP_SZ - 1)) / (WMMA_N * blockDim.x / WARP_SZ);
             gridDim.y = (tensorCoreExpFp32.get_n() + WMMA_M * blockDim.y - 1) / (WMMA_M * blockDim.y);
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     std::size_t padded_n = tensorCoreExpFp32Streams.get_n();
     tensorCoreExpFp32Streams.run_experiment_streams( 
         [&tensorCoreExpFp32Streams, padded_n, superblock_sz] (half *a, half *b, float *c, cudaStream_t stream) {
-            const dim3 blockDim { WMMA_M * 4, 4, 1 };
+            const dim3 blockDim { WARP_SZ * 4, 4, 1 };
             dim3 gridDim;
             gridDim.x = (padded_n + (WMMA_N * blockDim.x / WARP_SZ - 1)) / (WMMA_N * blockDim.x / WARP_SZ);
             gridDim.y = (superblock_sz + WMMA_M * blockDim.y - 1) / (WMMA_M * blockDim.y);
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
     padded_n = tensorCoreExpFp16.get_n();
     tensorCoreExpFp16.run_experiment( 
         [&tensorCoreExpFp16, padded_n] (half* a, half* b, half* c) {
-            const dim3 blockDim { WMMA_M * 4, 4, 1 };
+            const dim3 blockDim { WARP_SZ * 4, 4, 1 };
             dim3 gridDim;
             gridDim.x = (padded_n + (WMMA_M * blockDim.x / WARP_SZ - 1)) / (WMMA_M * blockDim.x / WARP_SZ);
             gridDim.y = (padded_n + WMMA_N * blockDim.y - 1) / (WMMA_N * blockDim.y);
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     padded_n = tensorCoreExpFp16Streams.get_n();
     tensorCoreExpFp16Streams.run_experiment_streams( 
         [&tensorCoreExpFp16Streams, padded_n, superblock_sz] (half *a, half *b, half *c, cudaStream_t stream) {
-            const dim3 blockDim { WMMA_M * 4, 4, 1 };
+            const dim3 blockDim { WARP_SZ * 4, 4, 1 };
             dim3 gridDim;
             gridDim.x = (padded_n + (WMMA_N * blockDim.x / WARP_SZ - 1)) / (WMMA_N * blockDim.x / WARP_SZ);
             gridDim.y = (superblock_sz + WMMA_M * blockDim.y - 1) / (WMMA_M * blockDim.y);
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     GemmExperiment<unsigned char, int> tensorCoreExpInt8{original_n, max_element, multiple, seed, print_result};
     tensorCoreExpInt8.run_experiment(
         [&tensorCoreExpInt8] (unsigned char *a, unsigned char *b, int *c) {
-            const dim3 blockDim { WMMA_M * 4, 4, 1 };
+            const dim3 blockDim { WARP_SZ * 4, 4, 1 };
             dim3 gridDim;
             gridDim.x = (tensorCoreExpInt8.get_n() + (WMMA_N * blockDim.x / WARP_SZ - 1)) / (WMMA_N * blockDim.x / WARP_SZ);
             gridDim.y = (tensorCoreExpInt8.get_n() + WMMA_M * blockDim.y - 1) / (WMMA_M * blockDim.y);
