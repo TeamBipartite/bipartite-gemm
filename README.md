@@ -38,5 +38,16 @@ A clean is required before switching configurations.
 A single executable, `a4` is generated. Simply run this file.
 
 For debugging and output inspection, `a4` provides a `-p` argument. When this
-argument is provided, a printed output of the generated edge list in addition to
-both expected and actual outputs for both dense and CSR implementations is produced.
+argument is provided, a printed output of both the expected and actual outputs.
+
+**PRECISION NOTE:** We provide an FP16 version of our tensor matrix multiplication,
+but since FP16 only has a 10-bit mantissa, it can be quite inaccurate for larger
+matrices (or matrices with large values). We use a fixed epsilon (currently set
+to `0.00001`) for output checking. This works on the provided example, but if the
+parameters in `main.cu` are changed, **the test may report a fail for the FP16 runs
+even though the output is as accurate as practical for FP16**. Changing the
+`FIXED_EPSILON` in `gemm_experiment.h` may alleviate these issues, but note that
+for large matrices (or large values) the accumulated error of many FP16 additions
+can be quite large (in the order of 3 or 4 decimal digits in the worst possible
+cases). **This is a practical limitation with FP16 that accounting for
+is outside the scope of this project.**

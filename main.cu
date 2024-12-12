@@ -9,7 +9,7 @@
 #endif
 
 #include "gemm_experiment.h"
-#include "GEMM.h"
+#include "GEMM.hpp"
 
 using namespace csc485b::a4;
 

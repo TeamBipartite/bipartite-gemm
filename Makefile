@@ -14,7 +14,7 @@ TARGET?=sm_75
 
 all: a4
 
-a4: main.cu gemm_experiment.h cuda_common.h GEMM.h
+a4: main.cu gemm_experiment.h cuda_common.h GEMM.hpp
 	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o a4 main.cu -arch=$(TARGET) $(CXXFLAGS)
 
 clean:
