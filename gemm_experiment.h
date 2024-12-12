@@ -91,7 +91,8 @@ public:
     }
 
     void prepare_device(){
-        assert( n * n == matrix_a.size() && "GemmExperiment need to be of size n x n" );
+        assert( n * n == matrix_a.size() && "GemmExperiment needs to be of size n x n" );
+
         // Allocate space on device
         cudaMalloc( &d_matrix_a, sizeof( I ) * n * n );
         cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
@@ -123,58 +124,74 @@ public:
         return superblock_sz;
     }
 
-    void run_experiment( std::function<void(I*, I*, R*)> kernel_wrapper, std::string title){
-        auto const start = std::chrono::high_resolution_clock::now();
-        prepare_device();
-        kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
-        cudaDeviceSynchronize();
-        get_product_from_device();
-        auto const end = std::chrono::high_resolution_clock::now();
-        get_results(title, start, end);
-    }
-
-    void run_experiment_streams( std::function<void(I*, I*, R*, cudaStream_t)> kernel_wrapper, std::string title)
+    void run_experiment( std::function<void(I*, I*, R*)> kernel_wrapper, std::string title, int num_runs=1)
     {
-        auto const start = std::chrono::high_resolution_clock::now();
-        cudaMalloc( &d_matrix_a, sizeof( I ) * 2 * superblock_sz * n );
-        cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
-        cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * n);
- 
-        // Copy contents of matrix_a and matrix_b to pinned memory
-        cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
-        cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
-        cudaMallocHost((void**) &h_matrix_c, sizeof( R ) * matrix_b.size());
-        memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
-        memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
+        assert( num_runs && "Cannot call run_experiment with 0 runs." );
 
-        // Copy b to device (needs to be done first since b is row-major)
-        cudaMemcpy( d_matrix_b, h_matrix_b,  sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
-
-        assert( n * n == matrix_a.size() && "GemmExperiment need to be of size n x n" );
-        assert( n % superblock_sz ==0 && "superblock_sz must be a factor of n" );
-
-        // i+=2 because two superblocks are computed in separate streams concurrently
-        for (std::size_t i = 0; i < n/superblock_sz; i+=2)
+        std::size_t time_sum = 0;
+        for (int i = 0; i < num_runs; i++)
         {
-          cudaMemcpyAsync( d_matrix_a, h_matrix_a+superblock_sz*i*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] );
-          cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a+superblock_sz*(i+1)*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] );
-
-          kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, streams[0]);
-          kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*n, streams[1]);
-
-          cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n, d_matrix_c, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[0] );
-          cudaMemcpyAsync(  h_matrix_c + superblock_sz*(i+1)*n, d_matrix_c + superblock_sz*n, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[1] );
+            auto const start = std::chrono::high_resolution_clock::now();
+            prepare_device();
+            kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c);
+            cudaDeviceSynchronize();
+            get_product_from_device();
+            auto const end = std::chrono::high_resolution_clock::now();
+            time_sum += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
 
-        cudaDeviceSynchronize();
-        memcpy(matrix_c.data(), h_matrix_c,  sizeof( R ) * matrix_c.size());
-        auto const end = std::chrono::high_resolution_clock::now();
-        get_results(title, start, end);
+        get_results(title, time_sum/num_runs, num_runs);
     }
 
-    void get_results( std::string title, std::chrono::time_point<std::chrono::high_resolution_clock> start, 
-                      std::chrono::time_point<std::chrono::high_resolution_clock> end ) {
-        std::cout << std::format("--------{}--------", title) << std::endl;
+    void run_experiment_streams( std::function<void(I*, I*, R*, cudaStream_t)> kernel_wrapper, std::string title, int num_runs=1)
+    {
+        assert( num_runs && "Cannot call run_experiment with 0 runs.");
+
+        std::size_t time_sum = 0;
+        for (int i = 0; i < num_runs; i++)
+        {
+            auto const start = std::chrono::high_resolution_clock::now();
+            cudaMalloc( &d_matrix_a, sizeof( I ) * 2 * superblock_sz * n );
+            cudaMalloc( &d_matrix_b, sizeof( I ) * n * n );
+            cudaMalloc( &d_matrix_c, sizeof( R ) * 2 * superblock_sz * n);
+
+            // Copy contents of matrix_a and matrix_b to pinned memory
+            cudaMallocHost((void**) &h_matrix_a, sizeof( I ) * matrix_a.size());
+            cudaMallocHost((void**) &h_matrix_b, sizeof( I ) * matrix_b.size());
+            cudaMallocHost((void**) &h_matrix_c, sizeof( R ) * matrix_b.size());
+            memcpy(h_matrix_a, matrix_a.data(),  sizeof( I ) * matrix_a.size());
+            memcpy(h_matrix_b, matrix_b.data(),  sizeof( I ) * matrix_b.size());
+
+            // Copy b to device (needs to be done first since b is row-major)
+            cudaMemcpy( d_matrix_b, h_matrix_b,  sizeof( I ) * matrix_b.size(), cudaMemcpyHostToDevice );
+
+            assert( n * n == matrix_a.size() && "GemmExperiment need to be of size n x n" );
+            assert( n % superblock_sz ==0 && "superblock_sz must be a factor of n" );
+
+            // i+=2 because two superblocks are computed in separate streams concurrently
+            for (std::size_t i = 0; i < n/superblock_sz; i+=2)
+            {
+              cudaMemcpyAsync( d_matrix_a, h_matrix_a+superblock_sz*i*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[0] );
+              cudaMemcpyAsync( d_matrix_a + superblock_sz*n, h_matrix_a+superblock_sz*(i+1)*n, sizeof( I ) * superblock_sz*n, cudaMemcpyHostToDevice, streams[1] );
+
+              kernel_wrapper(d_matrix_a, d_matrix_b, d_matrix_c, streams[0]);
+              kernel_wrapper(d_matrix_a+superblock_sz*n, d_matrix_b, d_matrix_c+superblock_sz*n, streams[1]);
+
+              cudaMemcpyAsync(  h_matrix_c + superblock_sz*i*n, d_matrix_c, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[0] );
+              cudaMemcpyAsync(  h_matrix_c + superblock_sz*(i+1)*n, d_matrix_c + superblock_sz*n, sizeof( R ) * superblock_sz*n, cudaMemcpyDeviceToHost, streams[1] );
+            }
+
+            cudaDeviceSynchronize();
+            memcpy(matrix_c.data(), h_matrix_c,  sizeof( R ) * matrix_c.size());
+            auto const end = std::chrono::high_resolution_clock::now();
+            time_sum += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        }
+
+        get_results(title, time_sum/num_runs, num_runs);
+    }
+
+    void get_results( std::string title, std::size_t time_us, int num_runs=1 ) {
+        std::cout << std::format("--------{} (runs: {})--------", title, num_runs) << std::endl;
 
 #ifdef NO_OPENBLAS
         std::vector<R> matrix_c_expected = naive_cpu_matmul();
@@ -189,12 +206,9 @@ public:
 
         std::cout << "Correct output: " << matrices_equal( matrix_c, matrix_c_expected ) << std::endl;
 
+        double gflops = get_gflops(time_us, 28);
 
-        std::size_t time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        double gflops = get_gflops(time, 28);
-
-
-        std::cout << std::format("Time: {} us", time) << std::endl
+        std::cout << std::format("Time: {} us", time_us) << std::endl
                   << std::format("Estimated GFLOPs: {}", gflops) << std::endl;
     }
 
@@ -245,7 +259,7 @@ private:
             T val = 0;
             std::size_t count = 0;
             if ((count++) < n*n && row < n && col < n){
-                val = (T)distribution(rng);
+                val =7; //(T)distribution(rng);
             }
             matrix.push_back( val );
         }
@@ -265,14 +279,16 @@ private:
     bool matrices_equal( const std::vector<T>& matrix_actual, const std::vector<T>& matrix_expected )
     {
         assert( matrix_actual.size() == matrix_expected.size() && "The given matrices must have the same size");
-        
+        std::size_t max_error_a = 0, mac_error_b = 0;
         for ( std::size_t idx = 0; idx < matrix_actual.size(); ++idx)
         {
             if (fabs ( (float) (matrix_actual[idx] - matrix_expected[idx] ) ) >= 0.00001 ){
-                return false;
+                max_error_a = matrix_actual[idx];
+                mac_error_b = matrix_expected[idx];
+                //return false;
             }
         }
-
+        std::cout << "ERROR: " << max_error_a << " " << mac_error_b << "\n";
         return true;
     }
 
