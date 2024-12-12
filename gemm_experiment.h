@@ -5,6 +5,7 @@
 #include <string>
 #include <functional>
 #include <mma.h>
+#include <cstdlib>
 
 #ifndef NO_OPENBLAS
 #include <cblas.h>
@@ -183,8 +184,7 @@ public:
         if (print_result) std::cout << "Actual Result:" << std::endl;
         print_matrix<R>( matrix_c, n, print_result );
 
-        bool equal = matrix_c == matrix_c_expected;
-        std::cout << "Correct output: " << equal << std::endl;
+        std::cout << "Correct output: " << matrices_equal( matrix_c, matrix_c_expected ) << std::endl;
 
 
         std::size_t time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
@@ -256,6 +256,21 @@ private:
     constexpr std::size_t get_padded_sz( std::size_t n, std::size_t multiple)
     {
         return n%multiple ? n + (multiple - n%multiple) : n;
+    }
+
+    template <typename T>
+    bool matrices_equal( const std::vector<T>& matrix_actual, const std::vector<T>& matrix_expected )
+    {
+        assert( matrix_actual.size() == matrix_expected.size() && "The given matrices must have the same size");
+        
+        for ( std::size_t idx = 0; idx < matrix_actual.size(); ++idx)
+        {
+            if (fabs ( (float) (matrix_actual[idx] - matrix_expected[idx] ) ) >= 0.00001 ){
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // Member Functions
