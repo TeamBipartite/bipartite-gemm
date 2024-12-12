@@ -81,9 +81,12 @@ public:
      }
     
     ~GemmExperiment(){
-        if (d_matrix_a != nullptr) cudaFree(&d_matrix_a);
-        if (d_matrix_b != nullptr) cudaFree(&d_matrix_b);
-        if (d_matrix_c != nullptr) cudaFree(&d_matrix_c);
+        if (d_matrix_a != nullptr) cudaFree(d_matrix_a);
+        if (d_matrix_b != nullptr) cudaFree(d_matrix_b);
+        if (d_matrix_c != nullptr) cudaFree(d_matrix_c);
+        if (h_matrix_a != nullptr) cudaFree(h_matrix_a);
+        if (h_matrix_b != nullptr) cudaFree(h_matrix_b);
+        if (h_matrix_c != nullptr) cudaFree(h_matrix_c);
     }
 
     void prepare_device(){
