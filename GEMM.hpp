@@ -12,21 +12,6 @@ namespace csc485b {
 namespace a4 {
 namespace tensorcores{
 
-template<typename I, typename R>
-__global__
-void transpose_matrix(I *matrix, R *matrix_transpose, std::size_t width, std::size_t n) {
-  const std::size_t th_idx = blockDim.x * blockIdx.x + threadIdx.x;
-  const std::size_t row = th_idx / width;
-  const std::size_t col = th_idx % width;
-
-  if (th_idx < n){
-    matrix_transpose[(col * width) + row] = (R)matrix[(row * width) + col];
-  }
-
-  return;
-
-}
-
 /** gemm
   * @brief perform a gemm on two matricies of type I using tensor wmma
   *        instructions, saving the results in the type R matrix
@@ -64,9 +49,6 @@ void gemm(I *matrix_a, I *matrix_b, R *res, std::size_t n, std::size_t superbloc
         wmma::load_matrix_sync(afrag, matrix_a + a_row * n + a_col, n);
         wmma::load_matrix_sync(bfrag, matrix_b + b_row * n + b_col, n);
         wmma::mma_sync(acc, afrag, bfrag, acc);
-        // TODO: might need this when we consider non-square tiles
-        //a_col += WMMA_M;
-        //b_row += WMMA_N;
     }
 
     wmma::store_matrix_sync(res + c_row * n + c_col, acc, n, wmma::mem_row_major);
