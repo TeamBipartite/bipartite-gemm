@@ -207,10 +207,10 @@ public:
 
         std::cout << "Correct output: " << matrices_equal( matrix_c, matrix_c_expected ) << std::endl;
 
-        double gflops = get_gflops(time_us, 28);
+        double gflops = get_gflops(time_us, NUM_SMS);
 
         std::cout << std::format("Time: {} us", time_us) << std::endl
-                  << std::format("Estimated GFLOPs: {}", gflops) << std::endl;
+                  << std::format("Estimated GFLOPs/SM: {}", gflops) << std::endl;
     }
 
     double get_gflops(std::size_t us, std::size_t num_sms)
