@@ -15,8 +15,7 @@
 #define GIGA     1000000000
 #define FIXED_EPSILON 0.00001
 
-namespace csc485b {
-namespace a4 {
+namespace tempNametempName {
 
 template < typename I, typename R >
 class GemmExperiment {
@@ -328,5 +327,4 @@ private:
 }; // class GemmExperiment
 
 
-} // namespace a4
-} // namepace csc485b
+} // namepace tempNametempName

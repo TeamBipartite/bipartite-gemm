@@ -8,8 +8,7 @@
 
 using namespace nvcuda;
 
-namespace csc485b {
-namespace a4 {
+namespace tempNametempName{
 namespace tensorcores{
 
 /** gemm
@@ -132,5 +131,4 @@ void matrix_mult( uint32_t* matrix_a, uint32_t* matrix_b, uint32_t* result, std:
 }
 
 } // namespace cudacores
-} // namespace a4
-} // namespace csc485b
+} // namespace tempNametempName
