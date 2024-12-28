@@ -130,5 +130,204 @@ void matrix_mult( uint32_t* matrix_a, uint32_t* matrix_b, uint32_t* result, std:
     return;
 }
 
+template< typename T >
+__global__
+void mark_matrix_element( T* matrix, uint32_t* matrix_marks, std::size_t n )
+{
+    const std::size_t th_id = ( blockDim.x * blockIdx.x ) + threadIdx.x;
+
+    if ( th_id < n && matrix[th_id] ){
+        matrix_marks[th_id] = 1;
+    }
+
+}
+
+/**
+ * prefix_sum
+ * @brief Performs a block-local prefix sums and stores final result to an array of size = # of blocks
+ */
+template<typename T>
+__global__
+void prefix_sum( T* arr, T* block_sums, std::size_t n )
+{
+    const std::size_t global_th_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const std::size_t th_idx = threadIdx.x;
+
+    __shared__ T smem[1024];
+    smem[th_idx] = arr[global_th_idx % n];
+    __syncthreads();
+
+    for (std::size_t stride = 1; stride < 1024; stride <<= 1)
+    {
+        std::size_t val = 0;
+
+        if ( th_idx >= stride ){
+            val = smem[th_idx - stride];
+        }
+
+        __syncthreads();
+
+        if ( th_idx >= stride ){
+
+            smem[th_idx] +=  val;
+        }
+         __syncthreads();
+
+    }
+
+    if (global_th_idx < n ){
+        arr[global_th_idx] = smem[th_idx];
+    }
+    __syncthreads();
+
+    // Since we only launch a 1D kernel, the blockIdx.x's are unique
+    if ( global_th_idx < n && (!((global_th_idx+1) % 1024) || global_th_idx == n -1 )  ){
+        block_sums[blockIdx.x] = smem[th_idx];
+    }
+
+
+    return;
+}
+
+/**
+ * single_block_prefix_sum
+ * @brief Performs a prefix sum in a single block
+ */
+template < typename T >
+__global__
+void single_block_prefix_sum( T* arr, std::size_t n, uint32_t* num_non_zeros_ptr = nullptr  ){
+    const std::size_t th_id = threadIdx.x;
+    std::size_t max_number_items = n / 1024;
+    if ( n % 1024 ){
+        ++max_number_items;
+    }
+
+
+    /*
+    Since we only launch 1 block, we can use all of smem.
+    Tesla T4's have 64KB of smem per SM which gives 64KB/4B = 16384 uint32's
+    But, using this much results in the following error: 
+      function '_Z23single_block_prefix_sumIiEvPT_m' uses too much shared data (0x10000 bytes, 0xc000 max)
+    So, only use half of 0xc000 bytes (i.e. 49152 bytes) per SM.
+    49152B/4B = 12,288 unint32s 
+    Use 12,288B/2 = 6144 uint32s for smem and other 6144 uint32s for scratch.
+    */
+    __shared__ T smem[6144];
+    __shared__ T scratch[6144];
+
+    // Put all values this thread is responsible for in smem and scratch
+    for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
+        const T val = arr[data_idx];
+        smem[data_idx] = val;
+        scratch[data_idx] = val;
+    }
+
+    __syncthreads();
+
+    for (std::size_t stride = 1; stride < n; stride <<= 1){
+
+        // copy into scratch
+        for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024 ){
+            scratch[data_idx] = smem[data_idx];
+        }
+
+        __syncthreads();
+
+        // All threads in the block need to do the same number of iterations to ensure they all reach the sync!
+        for (std::size_t my_lane = th_id, iteration = 0; iteration < max_number_items; my_lane += 1024, ++iteration){
+
+          std::size_t val = 0;
+
+          if ( my_lane < n && my_lane >= stride ){
+              val = scratch[my_lane - stride];
+          }
+
+          __syncthreads();
+
+          if ( my_lane < n && my_lane >= stride ){
+              smem[my_lane] +=  val;
+          }
+          __syncthreads();
+        }
+    }
+
+    // Put all values this thread is responsible for back into the array.
+    for (std::size_t data_idx = th_id; data_idx < n; data_idx += 1024){
+        arr[data_idx] = smem[data_idx];
+    }
+
+    if ( num_non_zeros_ptr ){
+        // The value of num_non_zeros_ptr is the same for all threads, so the sync in the if block is SAFE!
+        __syncthreads();
+        if (!th_id){
+            *num_non_zeros_ptr = smem[n-1];
+        }
+
+    }
+}
+
+template < typename T >
+__global__
+void insert_non_zero_elements( T* input, uint32_t* positions, T* output, std::size_t n ) // where n is the size of the input
+{
+    const std::size_t th_id = ( blockDim.x * blockIdx.x ) + threadIdx.x;
+    const T input_element = input[th_id % n];
+    
+    if (th_id < n && input_element ){
+        output[ positions[th_id] ] = input_element;
+    }
+}
+
+template < typename T >
+__global__
+void histogram( T* hist, std::size_t n ) // where matrix has n rows and n columns
+{
+    const std::size_t th_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if ( th_id < ( n * n ) )
+    {
+        const T row = th_id / n;
+        atomicAdd( hist + row, 1 ); //or maybe atomicAdd( hist + row + 1, 1 ); if passing in hist + 1 doesn't work
+    }
+
+    return;
+}
+
+template < typename T >
+__global__
+void store( T* scratch, T* cols, std::size_t n )
+{
+    const std::size_t th_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if ( th_id < ( n * n ) )
+    {
+        const T row = th_id / n;
+        const T col = th_id % n;
+
+        int pos = atomicAdd(scratch + row, 1);
+        cols[pos] = col;
+    }
+
+    return;
+}
+
+
+template < typename T >
+__global__
+void copy( T* input, T* copy, std::size_t n )
+{
+    const std::size_t th_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if ( th_id < n )
+    {
+        copy[th_id] = input[th_id];
+    }
+
+    return;
+}
+
+
+
+
 } // namespace cudacores
 } // namespace tempNametempName
