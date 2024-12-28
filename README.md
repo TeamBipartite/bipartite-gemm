@@ -4,7 +4,7 @@ A high-throughput data-parallel linear algebra library.
 
 # Prerequisites
 You should have a CUDA environment installed with a GPU of compute
-capability 7.5 or higher. Our code is has been tested on both the Turing and Ampere
+capability 7.5 or higher. Our code has been tested on both the Turing and Ampere
 architectures.
 
 If using the included benchmark/verification program, OpenBLAS is helpful for checking correctness of output, but not necessary.
