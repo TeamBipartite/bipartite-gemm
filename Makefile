@@ -1,4 +1,4 @@
-CXXFLAGS=-O3 -g -std=c++20
+CXXFLAGS=-O3 -g -std=c++20 -I.
 
 ifeq ($(USE_OPENBLAS),no)
 CXXFLAGS+= -DNO_OPENBLAS
@@ -19,12 +19,13 @@ NUM_SMS?=28
 # Default value for Turing. Use TARGET=sm_86 for Ampere
 TARGET?=sm_75
 
-all: bench
+all: build/bench
 
-bench: main.cu gemm_experiment.h cuda_common.h GEMM.hpp
-	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o bench main.cu \
+build/bench: bench/main.cu bench/gemm_experiment.h tempNametempName/cuda_common.h tempNametempName/GEMM.h
+	@mkdir -p build
+	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o build/bench bench/main.cu \
     -arch=$(TARGET) -DNUM_SMS=$(NUM_SMS) -DTEST_N=$(TEST_N) \
     -DTEST_MAX_ELEMENT=$(TEST_MAX_ELEMENT) $(CXXFLAGS)
 
 clean:
-	rm -f bench
+	rm -f build/*

@@ -8,8 +8,8 @@
 #include <cblas.h>
 #endif
 
-#include "gemm_experiment.h"
-#include "GEMM.hpp"
+#include "bench/gemm_experiment.h"
+#include "tempNametempName/GEMM.h"
 
 using namespace tempNametempName;
 
