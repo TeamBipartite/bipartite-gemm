@@ -8,10 +8,10 @@
 #include <cblas.h>
 #endif
 
-#include "gemm_experiment.h"
-#include "GEMM.hpp"
+#include "bench/gemm_experiment.h"
+#include "tempNametempName/GEMM.h"
 
-using namespace csc485b::a4;
+using namespace tempNametempName;
 
 /** 
  * main
@@ -23,9 +23,7 @@ int main(int argc, char **argv)
 
     if (argc > 1 && !strncmp(argv[1], "-p", 3)) print_result = true;
 
-    constexpr int original_n  = 4096;
-    constexpr int multiple    = WMMA_M * 4;
-    constexpr int max_element = 1;
+    constexpr int multiple = WMMA_M * 4;
 
     // Create a random device
     std::random_device rd;
@@ -41,7 +39,7 @@ int main(int argc, char **argv)
     ****************************
     */
 
-    GemmExperiment<uint32_t, uint32_t> cudaCoreExp{original_n, max_element, multiple, seed, print_result};
+    GemmExperiment<uint32_t, uint32_t> cudaCoreExp{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result};
     cudaCoreExp.run_experiment( 
         [&cudaCoreExp] (uint32_t* a, uint32_t* b, uint32_t* c) {
             uint32_t block_dim_sz = (uint32_t)(cudaCoreExp.get_n() / WARP_SZ);
@@ -56,7 +54,7 @@ int main(int argc, char **argv)
     **********************************
     */
     
-    GemmExperiment<half, float> tensorCoreExpFp32{original_n, max_element, multiple, seed, print_result};
+    GemmExperiment<half, float> tensorCoreExpFp32{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result};
     tensorCoreExpFp32.run_experiment(
         [&tensorCoreExpFp32] (half* a, half* b, float* c) {
             const dim3 blockDim { WARP_SZ * 4, 4, 1 };
@@ -72,7 +70,7 @@ int main(int argc, char **argv)
     **********************************
     */
     std::size_t superblock_sz = 128;
-    GemmExperiment<half, float> tensorCoreExpFp32Streams{original_n, max_element, multiple, seed, print_result, superblock_sz};
+    GemmExperiment<half, float> tensorCoreExpFp32Streams{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result, superblock_sz};
     std::size_t padded_n = tensorCoreExpFp32Streams.get_n();
     tensorCoreExpFp32Streams.run_experiment_streams( 
         [&tensorCoreExpFp32Streams, padded_n, superblock_sz] (half *a, half *b, float *c, cudaStream_t stream) {
@@ -88,7 +86,7 @@ int main(int argc, char **argv)
     **********************************
     */
 
-    GemmExperiment<half, half> tensorCoreExpFp16{original_n, max_element, multiple, seed, print_result};
+    GemmExperiment<half, half> tensorCoreExpFp16{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result};
     padded_n = tensorCoreExpFp16.get_n();
     tensorCoreExpFp16.run_experiment( 
         [&tensorCoreExpFp16, padded_n] (half* a, half* b, half* c) {
@@ -107,7 +105,7 @@ int main(int argc, char **argv)
     */
 
     superblock_sz = 128;
-    GemmExperiment<half, half> tensorCoreExpFp16Streams{original_n, max_element, multiple, seed, print_result, superblock_sz};
+    GemmExperiment<half, half> tensorCoreExpFp16Streams{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result, superblock_sz};
     padded_n = tensorCoreExpFp16Streams.get_n();
     tensorCoreExpFp16Streams.run_experiment_streams( 
         [&tensorCoreExpFp16Streams, padded_n, superblock_sz] (half *a, half *b, half *c, cudaStream_t stream) {
@@ -124,7 +122,7 @@ int main(int argc, char **argv)
     **********************************
     */
 
-    GemmExperiment<unsigned char, int> tensorCoreExpInt8{original_n, max_element, multiple, seed, print_result};
+    GemmExperiment<unsigned char, int> tensorCoreExpInt8{TEST_N, TEST_MAX_ELEMENT, multiple, seed, print_result};
     tensorCoreExpInt8.run_experiment(
         [&tensorCoreExpInt8] (unsigned char *a, unsigned char *b, int *c) {
             const dim3 blockDim { WARP_SZ * 4, 4, 1 };
