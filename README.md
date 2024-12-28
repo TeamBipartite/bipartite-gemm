@@ -53,7 +53,8 @@ Simply copy the `tempNametempName` directory to your system's `include`
 directory to install the library for use in other applications. The interface is
 provided within the `tempNametempName` namespace.
 
-A `bench` executable is also generated for testing and verification purposes. Simply run this file to both verify output correctness and benchmark
+A `bench` executable is generated in the `build` directory for testing and verification purposes. 
+Simply run this file to both verify output correctness and benchmark
 the library - it does not need to be installed to run. Note that the test parameters must be passed at compile time using
 the options specified in the `build` section of this document - this is to
 ensure best performance possible through hte use of compile-time constants.
