@@ -27,5 +27,8 @@ build/bench: bench/main.cu bench/gemm_experiment.h tempNametempName/cuda_common.
     -arch=$(TARGET) -DNUM_SMS=$(NUM_SMS) -DTEST_N=$(TEST_N) \
     -DTEST_MAX_ELEMENT=$(TEST_MAX_ELEMENT) $(CXXFLAGS)
 
+csr-test: bench/matrix_to_csr_test.cu tempNametempName/cuda_common.h tempNametempName/GEMM.h
+	nvcc -o csr-test bench/matrix_to_csr_test.cu \
+    -arch=$(TARGET) -DNUM_SMS=$(NUM_SMS) $(CXXFLAGS)
 clean:
 	rm -f build/*

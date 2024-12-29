@@ -132,7 +132,7 @@ void matrix_mult( uint32_t* matrix_a, uint32_t* matrix_b, uint32_t* result, std:
 
 template< typename T >
 __global__
-void mark_matrix_element( T* matrix, uint32_t* matrix_marks, std::size_t n )
+void mark_matrix_element( T* matrix, uint32_t* matrix_marks, std::size_t n ) // where n is the length of matrix and matrix_marks
 {
     const std::size_t th_id = ( blockDim.x * blockIdx.x ) + threadIdx.x;
 
