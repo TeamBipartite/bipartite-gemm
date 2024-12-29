@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     uint32_t* d_final_sum = nullptr;
     uint32_t final_sum = 0;
 
-    uint32_t n1 = 2045;
+    uint32_t n1 = 2047;
     std::vector<uint32_t> v1;
 
     for (uint32_t i = 0; i < n1; ++i ) v1.push_back(i);
@@ -29,28 +29,87 @@ int main(int argc, char **argv)
     std::vector<uint32_t> v1_copy = v1;
 
     // Allocate space on device
-    cudaMalloc( &d_arr, sizeof( uint32_t ) * n1 );
+    cudaMalloc( &d_arr, sizeof( uint32_t ) * (n1+1) );
     cudaMalloc( &d_final_sum, sizeof( uint32_t ) );
 
+    cudaMemset( d_arr, 0, sizeof(uint32_t) * (n1+1));
+
     // Copy contents to device
-    cudaMemcpy( d_arr, v1.data(), sizeof( uint32_t ) * n1, cudaMemcpyHostToDevice );
+    cudaMemcpy( d_arr+1, v1.data(), sizeof( uint32_t ) * n1, cudaMemcpyHostToDevice );
     cudaMemcpy( d_final_sum, &final_sum, sizeof( uint32_t ), cudaMemcpyHostToDevice );
     
-    cudacores::single_block_prefix_sum<<<1, 1024>>>( d_arr, n1, d_final_sum );
+    cudacores::single_block_prefix_sum<<<1, 1024>>>( d_arr+1, n1+1, d_final_sum );
 
     // Get results from device
     cudaMemcpy( v1.data(), d_arr, sizeof(uint32_t) * n1, cudaMemcpyDeviceToHost );
     cudaMemcpy( &final_sum, d_final_sum, sizeof(uint32_t), cudaMemcpyDeviceToHost );
 
     // Compute expected results
+    std::vector<uint32_t> result(v1_copy.size());
+    std::exclusive_scan(v1_copy.begin(), v1_copy.end(), result.begin(), 0);
     std::inclusive_scan(v1_copy.begin(), v1_copy.end(), v1_copy.begin());
 
+    cudaFree(d_arr);
+    cudaFree(d_final_sum);
+
     // Pruint results
-    bool ps_correct = v1_copy == v1;
-    bool final_sum_correct = v1_copy[n1-1] == v1[n1-1];
+    bool ps_correct = result == v1;
+    bool final_sum_correct = v1_copy[n1-1] == final_sum;
     std::cout << "Prefix-sum correct: " << ps_correct << std::endl;
+    
+    for (int i = 0; i < n1; ++i){
+        //std::cout << v1[i] << "   ";
+    }
+
+    std::cout << std::endl;
 
     std::cout << "Final sum correct: " << final_sum_correct << std::endl;
+    std::cout << "Final sum: " << final_sum << std::endl;
+
+
+    std::cout<< "-------------Creating the V array-------------" << std::endl;
+    uint32_t n2 = 4;
+    std::vector input{5, 0, 0, 0, 
+                      0, 8, 0, 0,
+                      0, 0, 3, 0,
+                      0, 6, 0, 0};
+    std::vector positions{1, 0, 0, 0, 
+                          0, 1, 0, 0,
+                          0, 0, 1, 0,
+                          0, 1, 0, 0};
+    std::exclusive_scan(positions.begin(), positions.end(), positions.begin(), 0);
+    int num_non_zeros = 4;
+    std::vector<uint32_t> output(num_non_zeros, 0);
+
+    uint32_t* d_input = nullptr;
+    uint32_t* d_positions = nullptr;
+    uint32_t* d_output = nullptr;
+
+    // Allocate space on device
+    cudaMalloc( &d_input, sizeof( uint32_t ) * input.size() );
+    cudaMalloc( &d_positions, sizeof( uint32_t ) * positions.size() );
+    cudaMalloc( &d_output, sizeof( uint32_t ) * output.size() );
+
+    // Copy contents to device
+    cudaMemcpy( d_input, input.data(), sizeof( uint32_t ) * input.size(), cudaMemcpyHostToDevice );
+    cudaMemcpy( d_positions, positions.data(), sizeof( uint32_t ) * input.size(), cudaMemcpyHostToDevice );
+    cudaMemcpy( d_output, output.data(), sizeof( uint32_t ) * num_non_zeros, cudaMemcpyHostToDevice );
+    
+    cudacores::insert_non_zero_elements<<<1, 1024>>>( d_input, d_positions, d_output, input.size() );
+
+    // Get results from device
+    cudaMemcpy( output.data(), d_output, sizeof(uint32_t) * num_non_zeros, cudaMemcpyDeviceToHost );
+
+    // Compute expected results
+    std::vector<uint32_t> output_expected{5, 8, 3, 6};
+    bool v_array_correct = output_expected == output;
+    std::cout << "Final V array correct: " <<  v_array_correct << std::endl;
+
+
+
+
+
+
 
 
     return EXIT_SUCCESS;
