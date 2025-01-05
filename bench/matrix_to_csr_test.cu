@@ -106,11 +106,39 @@ int main(int argc, char **argv)
     std::cout << "Final V array correct: " <<  v_array_correct << std::endl;
 
 
+    std::cout<< "-------------Creating COL_INDEX-------------" << std::endl;
+    std::vector<uint32_t> row_index{0, 2, 3, 4, 5};
+    std::vector<uint32_t> col_index{0, 0, 0, 0, 0};
+    std::vector<uint32_t> input2 {5, 1, 0, 0, 
+                                  0, 8, 0, 0,
+                                  0, 0, 3, 0,
+                                  0, 6, 0, 0};
+    uint32_t* d_row_index = nullptr;
+    uint32_t* d_col_index = nullptr;
+    uint32_t* d_input2 = nullptr;
+
+    cudaMalloc( &d_row_index, sizeof( uint32_t ) * row_index.size() );
+    cudaMalloc( &d_col_index, sizeof( uint32_t ) * col_index.size() );
+    cudaMalloc( &d_input2, sizeof( uint32_t ) * input2.size() );
 
 
+    cudaMemcpy( d_row_index, row_index.data(), sizeof( uint32_t ) * row_index.size(), cudaMemcpyHostToDevice );
+    cudaMemcpy( d_input2, input2.data(), sizeof( uint32_t ) * input2.size(), cudaMemcpyHostToDevice );
 
+    cudacores::store<uint32_t, uint32_t><<<1, 1024>>>( d_input2, d_row_index, d_col_index, n2 );
 
+    // Get results from device
+    cudaMemcpy( col_index.data(), d_col_index, sizeof(uint32_t) * col_index.size(), cudaMemcpyDeviceToHost );
 
+    std::vector<uint32_t> expected_col_index{0, 1, 1, 2, 1};
+
+    bool col_index_correct = expected_col_index == col_index;
+    std::cout << "col_index correct: " << col_index_correct << std::endl;
+
+    for (int i = 0; i < col_index.size(); ++i){
+        std::cout << col_index[i] << "   ";
+    }
+    std::cout << std::endl;
 
     return EXIT_SUCCESS;
 }

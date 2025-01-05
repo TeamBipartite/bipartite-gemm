@@ -293,13 +293,13 @@ void histogram( T* hist, std::size_t n ) // where matrix has n rows and n column
     return;
 }
 
-template < typename T >
+template < typename I, typename T >
 __global__
-void store( T* scratch, T* cols, std::size_t n )
+void store( I* input, T* scratch, T* cols, std::size_t n )
 {
     const std::size_t th_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if ( th_id < ( n * n ) )
+    if ( th_id < ( n * n ) && input[th_id])
     {
         const T row = th_id / n;
         const T col = th_id % n;
