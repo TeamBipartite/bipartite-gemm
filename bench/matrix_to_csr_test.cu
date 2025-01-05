@@ -9,13 +9,8 @@
 
 using namespace tempNametempName;
 
-int main(int argc, char **argv)
+int main( )
 {   
-    bool print_result = false;
-
-    if (argc > 1 && !strncmp(argv[1], "-p", 3)) print_result = true;
-
-
     std::cout<< "-------------Prefix-Sum single block-------------" << std::endl;
     uint32_t* d_arr = nullptr;
     uint32_t* d_final_sum = nullptr;
@@ -29,6 +24,7 @@ int main(int argc, char **argv)
     std::vector<uint32_t> v1_copy = v1;
 
     // Allocate space on device
+    // Note: we allocate n1 + 1 uint32_t's on the device to handle the exclusive scan with HS's algorithm
     cudaMalloc( &d_arr, sizeof( uint32_t ) * (n1+1) );
     cudaMalloc( &d_final_sum, sizeof( uint32_t ) );
 
@@ -38,9 +34,13 @@ int main(int argc, char **argv)
     cudaMemcpy( d_arr+1, v1.data(), sizeof( uint32_t ) * n1, cudaMemcpyHostToDevice );
     cudaMemcpy( d_final_sum, &final_sum, sizeof( uint32_t ), cudaMemcpyHostToDevice );
     
+    // Note: d_arr has n1+1 elements with the elements of v1 starting at index 1 (with index zero being 0)
+    // This allows us to maintain an exlusive scan at indices 0-(n1-1) and still hold the final sum at index n1 if needed
+    // We do this because when constructing the V array, we need to know the total number of non-zero elements.
     cudacores::single_block_prefix_sum<<<1, 1024>>>( d_arr+1, n1+1, d_final_sum );
 
     // Get results from device
+    // Exclusive scan is held at indices 0-n1 
     cudaMemcpy( v1.data(), d_arr, sizeof(uint32_t) * n1, cudaMemcpyDeviceToHost );
     cudaMemcpy( &final_sum, d_final_sum, sizeof(uint32_t), cudaMemcpyDeviceToHost );
 
@@ -105,6 +105,9 @@ int main(int argc, char **argv)
     bool v_array_correct = output_expected == output;
     std::cout << "Final V array correct: " <<  v_array_correct << std::endl;
 
+    cudaFree( d_input );
+    cudaFree( d_output );
+    cudaFree( d_positions );
 
     std::cout<< "-------------Creating COL_INDEX-------------" << std::endl;
     std::vector<uint32_t> row_index{0, 2, 3, 4, 5};
@@ -139,6 +142,10 @@ int main(int argc, char **argv)
         std::cout << col_index[i] << "   ";
     }
     std::cout << std::endl;
+
+    cudaFree( d_row_index );
+    cudaFree( d_col_index );
+    cudaFree( d_input2 );
 
     return EXIT_SUCCESS;
 }
