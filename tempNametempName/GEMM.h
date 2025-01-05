@@ -278,13 +278,13 @@ void insert_non_zero_elements( T* input, uint32_t* positions, T* output, std::si
     }
 }
 
-template < typename T >
+template < typename I, typename T >
 __global__
-void histogram( T* hist, std::size_t n ) // where matrix has n rows and n columns
+void histogram( I* input, T* hist, std::size_t n ) // where matrix has n rows and n columns
 {
     const std::size_t th_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if ( th_id < ( n * n ) )
+    if ( th_id < ( n * n ) && input[th_id] )
     {
         const T row = th_id / n;
         atomicAdd( hist + row, 1 ); //or maybe atomicAdd( hist + row + 1, 1 ); if passing in hist + 1 doesn't work
@@ -325,9 +325,6 @@ void copy( T* input, T* copy, std::size_t n )
 
     return;
 }
-
-
-
 
 } // namespace cudacores
 } // namespace tempNametempName

@@ -56,13 +56,6 @@ int main( )
     bool ps_correct = result == v1;
     bool final_sum_correct = v1_copy[n1-1] == final_sum;
     std::cout << "Prefix-sum correct: " << ps_correct << std::endl;
-    
-    for (int i = 0; i < n1; ++i){
-        //std::cout << v1[i] << "   ";
-    }
-
-    std::cout << std::endl;
-
     std::cout << "Final sum correct: " << final_sum_correct << std::endl;
     std::cout << "Final sum: " << final_sum << std::endl;
 
@@ -147,5 +140,33 @@ int main( )
     cudaFree( d_col_index );
     cudaFree( d_input2 );
 
+    std::cout<< "-------------Creating Histogram-------------" << std::endl;
+    std::vector<uint32_t> input3 {5, 1, 0, 0, 
+                                  0, 8, 0, 0,
+                                  5, 0, 3, 1,
+                                  0, 0, 0, 0};
+    std::size_t n3 = 4;
+    std::vector<uint32_t> hist(n3, 0);
+    uint32_t* d_input3 = nullptr;
+    uint32_t* d_hist= nullptr;
+
+    cudaMalloc( &d_input3, sizeof( uint32_t ) * input3.size() );
+    cudaMalloc( &d_hist, sizeof( uint32_t ) * hist.size() );
+
+    cudaMemset( d_hist, 0, sizeof(uint32_t) * hist.size() );
+    cudaMemcpy( d_input3, input3.data(), sizeof( uint32_t ) * input3.size(), cudaMemcpyHostToDevice );
+
+    cudacores::histogram<uint32_t, uint32_t><<<1, 1024>>>( d_input3, d_hist, n3 );
+
+    cudaMemcpy( hist.data(), d_hist, sizeof(uint32_t) * hist.size(), cudaMemcpyDeviceToHost );
+
+    std::vector<uint32_t> expected_hist{2, 1, 3, 0};
+    bool hists_equal = expected_hist == hist;
+
+    std::cout << "Histogram Correct: " << hists_equal << std::endl;
+    for (int i = 0; i < hist.size(); ++i){
+        std::cout << hist[i] << "   ";
+    }
+    std::cout << std::endl;
     return EXIT_SUCCESS;
 }
