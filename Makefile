@@ -1,4 +1,6 @@
-CXXFLAGS=-O3 -g -std=c++20 -I.
+CXXVERSION?=20
+
+CXXFLAGS=-O3 -std=c++$(CXXVERSION) -g -I.
 
 ifeq ($(USE_OPENBLAS),no)
 CXXFLAGS+= -DNO_OPENBLAS

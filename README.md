@@ -35,6 +35,8 @@ To configure the tests ran by `bench`, the following options may also be passed:
  * `TEST_MAX_ELEMENT=n` For library functions that operate on numerical data,
    specifies the maximum element to (randomly) generate for test data.
    default=1
+ * `CXXVERSION=20`: if compiling with CUDA < 12, you can set this to `17` to
+   compile using only `C++17` features.
 
 The following options may also be specified to configure use of the OpenBLAS
 library in `bench`:
