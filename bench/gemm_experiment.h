@@ -15,7 +15,7 @@
 #define GIGA     1000000000
 #define FIXED_EPSILON 0.00001
 
-namespace tempNametempName {
+namespace bipartite {
 
 template < typename I, typename R >
 class GemmExperiment {
@@ -327,4 +327,4 @@ private:
 }; // class GemmExperiment
 
 
-} // namepace tempNametempName
+} // namepace bipartite
