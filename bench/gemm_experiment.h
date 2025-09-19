@@ -11,6 +11,10 @@
 #include <cblas.h>
 #endif
 
+#if __cplusplus >= 202002L
+#define CXX20
+#endif
+
 #define US_PER_S 1000000
 #define GIGA     1000000000
 #define FIXED_EPSILON 0.00001
@@ -44,10 +48,10 @@ public:
 
 
     // Member Functions
-    GemmExperiment( std::size_t input_n, std::size_t upper_bound, std::size_t multiple, uint32_t seed, bool print_result ):
+    GemmExperiment( std::size_t input_n, unsigned int upper_bound, std::size_t multiple, uint32_t seed, bool print_result ):
                                                         n{get_padded_sz(input_n, multiple)},
-                                                        matrix_a{generate_matrix<I>(I(upper_bound), input_n, n, seed)}, 
-                                                        matrix_b{generate_matrix<I>(I(upper_bound), input_n, n, seed)},
+                                                        matrix_a{generate_matrix<I>(upper_bound, input_n, n, seed)},
+                                                        matrix_b{generate_matrix<I>(upper_bound, input_n, n, seed)},
                                                         matrix_c{std::vector<R>(n*n, R(0))},
                                                         d_matrix_a{nullptr},
                                                         d_matrix_b{nullptr},
@@ -60,10 +64,10 @@ public:
                                                         fixed_seed{seed},
                                                         print_result{print_result} {}
 
-    GemmExperiment( std::size_t input_n, std::size_t upper_bound, std::size_t multiple, uint32_t seed, bool print_result, std::size_t superblock_sz ):
+    GemmExperiment( std::size_t input_n, unsigned int upper_bound, std::size_t multiple, uint32_t seed, bool print_result, std::size_t superblock_sz ):
                                                         n{get_padded_sz(input_n, multiple)},
-                                                        matrix_a{generate_matrix<I>(I(upper_bound), input_n, n, seed)}, 
-                                                        matrix_b{generate_matrix<I>(I(upper_bound), input_n, n, seed)},
+                                                        matrix_a{generate_matrix<I>(upper_bound, input_n, n, seed)},
+                                                        matrix_b{generate_matrix<I>(upper_bound, input_n, n, seed)},
                                                         matrix_c{std::vector<R>(n*n, R(0))},
                                                         d_matrix_a{nullptr},
                                                         d_matrix_b{nullptr},
@@ -191,7 +195,11 @@ public:
     }
 
     void get_results( std::string title, std::size_t time_us, int num_runs=1 ) {
+#ifdef CXX20
         std::cout << std::format("--------{} (runs: {})--------", title, num_runs) << std::endl;
+#else
+        printf("--------%s (runs: %d)--------\n", title.c_str(), num_runs);
+#endif
 
 #ifdef NO_OPENBLAS
         std::vector<R> matrix_c_expected = naive_cpu_matmul();
@@ -208,8 +216,13 @@ public:
 
         double gflops = get_gflops(time_us, NUM_SMS);
 
+#ifdef CXX20
         std::cout << std::format("Time: {} us", time_us) << std::endl
                   << std::format("Estimated GFLOPs/SM: {}", gflops) << std::endl;
+#else
+        printf("Time: %lu us\n", time_us);
+        printf("Estimated GFLOPs/SM: %lf\n", gflops);
+#endif
     }
 
     double get_gflops(std::size_t us, std::size_t num_sms)
@@ -247,7 +260,7 @@ private:
 
     // Static Functions
     template< typename T >
-    static std::vector<T> generate_matrix( T upper_bound, std::size_t n, std::size_t padded_n, uint32_t seed )
+    static std::vector<T> generate_matrix( unsigned int upper_bound, std::size_t n, std::size_t padded_n, uint32_t seed )
     {
         std::mt19937 rng(seed);
         std::uniform_int_distribution<std::mt19937::result_type> distribution(0, upper_bound);
@@ -259,7 +272,11 @@ private:
             T val = 0;
             std::size_t count = 0;
             if ((count++) < n*n && row < n && col < n){
-                val = (T)distribution(rng);
+                /* first convert to int as CUDA < 12 can't do this conversion
+                 * implicitly
+                 */
+                int val_int = distribution(rng);
+                val = (T)val_int;
             }
             matrix.push_back( val );
         }
