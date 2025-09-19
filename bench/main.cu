@@ -9,9 +9,9 @@
 #endif
 
 #include "bench/gemm_experiment.h"
-#include "tempNametempName/GEMM.h"
+#include "bipartite-gemm/GEMM.h"
 
-using namespace tempNametempName;
+using namespace bipartite;
 
 /** 
  * main

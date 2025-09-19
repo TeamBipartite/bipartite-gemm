@@ -1,6 +1,7 @@
-# tempNametempName
+# BipartiteGEMM
 
-A high-throughput data-parallel linear algebra library.
+ High throughput data-parallel GEMM implementations in Cuda using Cuda cores and
+ Tensor cores.
 
 # Prerequisites
 You should have a CUDA environment installed with a GPU of compute
@@ -51,9 +52,9 @@ library in `bench`:
 A clean is required before switching configurations.
 
 # Install & run
-Simply copy the `tempNametempName` directory to your system's `include`
+Simply copy the `bipartite-gemm` directory to your system's `include`
 directory to install the library for use in other applications. The interface is
-provided within the `tempNametempName` namespace.
+provided within the `bipartite` namespace.
 
 A `bench` executable is generated in the `build` directory for testing and verification purposes. 
 Simply run this file to both verify output correctness and benchmark

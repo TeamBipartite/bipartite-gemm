@@ -23,7 +23,7 @@ TARGET?=sm_75
 
 all: build/bench
 
-build/bench: bench/main.cu bench/gemm_experiment.h tempNametempName/cuda_common.h tempNametempName/GEMM.h
+build/bench: bench/main.cu bench/gemm_experiment.h bipartite-gemm/cuda_common.h bipartite-gemm/GEMM.h
 	@mkdir -p build
 	OPENBLAS_NUM_THREADS=$(OPENBLAS_NUM_THREADS) nvcc -o build/bench bench/main.cu \
     -arch=$(TARGET) -DNUM_SMS=$(NUM_SMS) -DTEST_N=$(TEST_N) \

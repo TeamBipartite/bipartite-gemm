@@ -8,7 +8,7 @@
 
 using namespace nvcuda;
 
-namespace tempNametempName{
+namespace bipartite{
 namespace tensorcores{
 
 /** gemm
@@ -131,4 +131,4 @@ void matrix_mult( uint32_t* matrix_a, uint32_t* matrix_b, uint32_t* result, std:
 }
 
 } // namespace cudacores
-} // namespace tempNametempName
+} // namespace bipartite
